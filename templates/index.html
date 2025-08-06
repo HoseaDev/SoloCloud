@@ -1,0 +1,1103 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SoloCloud - 个人云存储</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.7.2/font/bootstrap-icons.css" rel="stylesheet">
+    <style>
+        .file-card {
+            transition: transform 0.2s;
+        }
+        .file-card:hover {
+            transform: translateY(-2px);
+        }
+        .thumbnail {
+            width: 100%;
+            height: 200px;
+            object-fit: cover;
+            border-radius: 8px;
+        }
+        .upload-area {
+            border: 2px dashed #dee2e6;
+            border-radius: 8px;
+            padding: 40px;
+            text-align: center;
+            transition: border-color 0.3s;
+        }
+        .upload-area:hover {
+            border-color: #0d6efd;
+        }
+        .upload-area.dragover {
+            border-color: #0d6efd;
+            background-color: #f8f9fa;
+        }
+        .sidebar {
+            min-height: 100vh;
+            background-color: #f8f9fa;
+        }
+        .nav-link.active {
+            background-color: #0d6efd;
+            color: white !important;
+        }
+        .upload-item {
+            background-color: #f8f9fa;
+            transition: all 0.3s ease;
+        }
+        .upload-item:hover {
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .progress {
+            height: 8px;
+        }
+        .upload-status {
+            font-size: 0.75rem;
+        }
+        
+        /* 文件网格视图样式 */
+        .file-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 20px;
+            padding: 10px 0;
+        }
+        
+        .file-card {
+            border: 1px solid #dee2e6;
+            border-radius: 8px;
+            padding: 15px;
+            text-align: center;
+            transition: all 0.3s ease;
+            cursor: pointer;
+            background: white;
+        }
+        
+        .file-card:hover {
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            transform: translateY(-2px);
+        }
+        
+        .file-thumbnail {
+            width: 100%;
+            height: 120px;
+            object-fit: cover;
+            border-radius: 6px;
+            margin-bottom: 10px;
+            background: #f8f9fa;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .file-thumbnail img {
+            max-width: 100%;
+            max-height: 100%;
+            border-radius: 6px;
+        }
+        
+        .file-thumbnail .file-icon {
+            font-size: 3rem;
+            color: #6c757d;
+        }
+        
+        .file-name {
+            font-weight: 500;
+            margin-bottom: 5px;
+            font-size: 0.9rem;
+            word-break: break-word;
+        }
+        
+        .file-meta {
+            font-size: 0.75rem;
+            color: #6c757d;
+            margin-bottom: 10px;
+        }
+        
+        .file-actions {
+            display: flex;
+            justify-content: center;
+            gap: 5px;
+        }
+        
+        .file-actions .btn {
+            padding: 4px 8px;
+            font-size: 0.75rem;
+        }
+        
+        /* 文件列表视图样式 */
+        .file-list {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        
+        .file-list-item {
+            display: flex;
+            align-items: center;
+            padding: 15px;
+            border: 1px solid #dee2e6;
+            border-radius: 8px;
+            background: white;
+            transition: all 0.2s ease;
+        }
+        
+        .file-list-item:hover {
+            background: #f8f9fa;
+            border-color: #0d6efd;
+        }
+        
+        .file-list-thumbnail {
+            width: 60px;
+            height: 60px;
+            margin-right: 15px;
+            border-radius: 6px;
+            object-fit: cover;
+            background: #f8f9fa;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+        }
+        
+        .file-list-thumbnail img {
+            max-width: 100%;
+            max-height: 100%;
+            border-radius: 6px;
+        }
+        
+        .file-list-thumbnail .file-icon {
+            font-size: 1.5rem;
+            color: #6c757d;
+        }
+        
+        .file-list-info {
+            flex: 1;
+            min-width: 0;
+        }
+        
+        .file-list-name {
+            font-weight: 500;
+            margin-bottom: 5px;
+            word-break: break-word;
+        }
+        
+        .file-list-meta {
+            font-size: 0.85rem;
+            color: #6c757d;
+        }
+        
+        .file-list-actions {
+            display: flex;
+            gap: 5px;
+            margin-left: 15px;
+        }
+        
+        .file-list-actions .btn {
+            padding: 6px 12px;
+            font-size: 0.8rem;
+        }
+        
+        /* 视频缩略图样式 */
+        .thumbnail-container {
+            position: relative;
+            display: inline-block;
+            width: 100%;
+            height: 100%;
+        }
+        
+        .thumbnail-image {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            border-radius: 4px;
+        }
+        
+        .video-overlay {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: rgba(255, 255, 255, 0.9);
+            font-size: 2rem;
+            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
+            pointer-events: none;
+            z-index: 1;
+        }
+        
+        .file-thumbnail:hover .video-overlay {
+            color: rgba(255, 255, 255, 1);
+            transform: translate(-50%, -50%) scale(1.1);
+            transition: all 0.2s ease;
+        }
+        
+        /* 聊天记录模块样式 */
+        .chat-messages {
+            max-height: 600px;
+            overflow-y: auto;
+            background: #f8f9fa;
+            border-radius: 12px;
+            padding: 20px;
+        }
+        
+        .chat-message {
+            margin-bottom: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: flex-end;
+        }
+        
+        .chat-message.text {
+            align-items: flex-end;
+        }
+        
+        .chat-message.file {
+            align-items: flex-end;
+        }
+        
+        .message-bubble {
+            background: #007bff;
+            color: white;
+            padding: 12px 16px;
+            border-radius: 18px;
+            max-width: 70%;
+            word-wrap: break-word;
+            position: relative;
+            margin-bottom: 5px;
+        }
+        
+        .message-bubble.text {
+            background: #007bff;
+        }
+        
+        .message-bubble.file {
+            background: #28a745;
+            padding: 8px;
+        }
+        
+        .message-time {
+            font-size: 0.75rem;
+            color: #6c757d;
+            margin-top: 2px;
+        }
+        
+        .file-message {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            background: white;
+            border: 1px solid #dee2e6;
+            border-radius: 12px;
+            padding: 12px;
+            max-width: 400px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        
+        .file-message:hover {
+            background: #f8f9fa;
+            border-color: #007bff;
+        }
+        
+        .file-message-icon {
+            font-size: 2rem;
+            color: #007bff;
+        }
+        
+        .file-message-info {
+            flex: 1;
+            min-width: 0;
+        }
+        
+        .file-message-name {
+            font-weight: 500;
+            margin-bottom: 2px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        
+        .file-message-size {
+            font-size: 0.8rem;
+            color: #6c757d;
+        }
+        
+        .image-message, .video-message {
+            position: relative;
+            border-radius: 12px;
+            overflow: hidden;
+            max-width: 300px;
+            cursor: pointer;
+        }
+        
+        .image-message img, .video-message img {
+            width: 100%;
+            height: auto;
+            display: block;
+        }
+        
+        .video-message::after {
+            content: '\F144';
+            font-family: 'Bootstrap Icons';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: rgba(255, 255, 255, 0.9);
+            font-size: 3rem;
+            text-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
+        }
+        
+        .message-actions {
+            position: absolute;
+            top: -10px;
+            right: -10px;
+            opacity: 0;
+            transition: opacity 0.2s ease;
+        }
+        
+        .chat-message:hover .message-actions {
+            opacity: 1;
+        }
+        
+        .delete-message {
+            background: #dc3545;
+            color: white;
+            border: none;
+            border-radius: 50%;
+            width: 24px;
+            height: 24px;
+            font-size: 0.7rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        #chatTextInput textarea {
+            resize: none;
+            border-radius: 20px;
+        }
+        
+        #chatTextInput .btn {
+            border-radius: 20px;
+            padding: 8px 20px;
+        }
+        
+        .chat-upload-area {
+            border: 2px dashed #dee2e6;
+            border-radius: 12px;
+            padding: 40px;
+            text-align: center;
+            transition: all 0.3s ease;
+        }
+        
+        .chat-upload-area:hover {
+            border-color: #007bff;
+            background: #f8f9fa;
+        }
+        
+        .chat-upload-area.dragover {
+            border-color: #007bff;
+            background: #e3f2fd;
+        }
+        
+        /* 聊天界面样式 */
+        .chat-container {
+            display: flex;
+            flex-direction: column;
+            height: calc(100vh - 120px);
+            position: relative;
+        }
+        
+        .chat-messages-container {
+            flex: 1;
+            overflow-y: auto;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 12px;
+            margin-bottom: 20px;
+            max-height: calc(100vh - 300px);
+        }
+        
+        .chat-input-container {
+            position: sticky;
+            bottom: 0;
+            background: white;
+            padding: 20px;
+            border-radius: 12px;
+            box-shadow: 0 -2px 10px rgba(0,0,0,0.1);
+            border: 1px solid #dee2e6;
+        }
+        
+        .chat-input-wrapper {
+            position: relative;
+            background: white;
+            border: 2px solid #e9ecef;
+            border-radius: 25px;
+            padding: 12px 20px;
+            transition: all 0.3s ease;
+        }
+        
+        .chat-input-wrapper:hover {
+            border-color: #0d6efd;
+        }
+        
+        .chat-input-wrapper.focus {
+            border-color: #0d6efd;
+            box-shadow: 0 0 0 0.2rem rgba(13, 110, 253, 0.25);
+        }
+        
+        .chat-textarea {
+            border: none;
+            outline: none;
+            resize: none;
+            width: 100%;
+            min-height: 20px;
+            max-height: 120px;
+            font-size: 14px;
+            line-height: 1.5;
+            background: transparent;
+        }
+        
+        .chat-input-actions {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-top: 8px;
+        }
+        
+        .chat-action-btn {
+            background: none;
+            border: none;
+            color: #6c757d;
+            font-size: 18px;
+            padding: 8px;
+            border-radius: 50%;
+            transition: all 0.2s ease;
+            cursor: pointer;
+        }
+        
+        .chat-action-btn:hover {
+            background: #f8f9fa;
+            color: #0d6efd;
+        }
+        
+        .chat-send-btn {
+            background: #0d6efd;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 20px;
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.2s ease;
+            margin-left: auto;
+        }
+        
+        .chat-send-btn:hover {
+            background: #0b5ed7;
+            transform: translateY(-1px);
+        }
+        
+        .chat-send-btn:disabled {
+            background: #6c757d;
+            cursor: not-allowed;
+            transform: none;
+        }
+        
+        .chat-message {
+            background: white;
+            border-radius: 12px;
+            padding: 16px;
+            margin-bottom: 16px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+            border: 1px solid #f0f0f0;
+            transition: all 0.2s ease;
+        }
+        
+        .chat-message:hover {
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+        }
+        
+        .chat-message-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+            font-size: 12px;
+            color: #6c757d;
+        }
+        
+        .chat-message-content {
+            font-size: 14px;
+            line-height: 1.6;
+            color: #333;
+        }
+        
+        .chat-file-preview {
+            margin-top: 12px;
+            padding: 12px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            border: 1px solid #e9ecef;
+        }
+        
+        /* 聊天消息具体样式 */
+        .message-bubble {
+            position: relative;
+            background: #f8f9fa;
+            border-radius: 12px;
+            padding: 12px 16px;
+            max-width: 100%;
+            word-wrap: break-word;
+        }
+        
+        .image-message {
+            position: relative;
+            display: inline-block;
+            border-radius: 12px;
+            overflow: hidden;
+            cursor: pointer;
+            max-width: 300px;
+        }
+        
+        .image-message img {
+            width: 100%;
+            height: auto;
+            display: block;
+            border-radius: 12px;
+        }
+        
+        .video-message {
+            position: relative;
+            display: inline-block;
+            border-radius: 12px;
+            overflow: hidden;
+            cursor: pointer;
+            max-width: 300px;
+        }
+        
+        .video-message img {
+            width: 100%;
+            height: auto;
+            display: block;
+            border-radius: 12px;
+        }
+        
+        .file-message {
+            position: relative;
+            display: flex;
+            align-items: center;
+            background: #f8f9fa;
+            border: 1px solid #e9ecef;
+            border-radius: 12px;
+            padding: 12px 16px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            max-width: 300px;
+        }
+        
+        .file-message:hover {
+            background: #e9ecef;
+        }
+        
+        .file-message-icon {
+            font-size: 24px;
+            margin-right: 12px;
+            color: #6c757d;
+        }
+        
+        .file-message-info {
+            flex: 1;
+            min-width: 0;
+        }
+        
+        .file-message-name {
+            font-weight: 500;
+            font-size: 14px;
+            color: #333;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        
+        .file-message-size {
+            font-size: 12px;
+            color: #6c757d;
+            margin-top: 2px;
+        }
+        
+        .message-actions {
+            position: absolute;
+            top: 8px;
+            right: 8px;
+            opacity: 0;
+            transition: opacity 0.2s ease;
+        }
+        
+        .chat-message:hover .message-actions {
+            opacity: 1;
+        }
+        
+        .delete-message {
+            background: #dc3545;
+            color: white;
+            border: none;
+            border-radius: 50%;
+            width: 24px;
+            height: 24px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            font-size: 12px;
+            transition: all 0.2s ease;
+            box-shadow: 0 2px 4px rgba(220, 53, 69, 0.3);
+        }
+        
+        .delete-message:hover {
+            background: #c82333;
+            transform: scale(1.1);
+        }
+        
+        .message-time {
+            font-size: 11px;
+            color: #6c757d;
+            margin-top: 8px;
+            text-align: right;
+        }
+        
+
+        
+        .drag-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(13, 110, 253, 0.1);
+            border: 3px dashed #0d6efd;
+            border-radius: 12px;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 999;
+        }
+        
+        .drag-overlay.active {
+            display: flex;
+        }
+        
+        .drag-overlay-content {
+            text-align: center;
+            color: #0d6efd;
+            font-size: 18px;
+            font-weight: 500;
+        }
+    </style>
+</head>
+<body>
+    <div class="container-fluid">
+        <div class="row">
+            <!-- 侧边栏 -->
+            <div class="col-md-3 col-lg-2 sidebar p-3">
+                <div class="d-flex justify-content-between align-items-center mb-4">
+                    <h4 class="mb-0"><i class="bi bi-cloud"></i> SoloCloud</h4>
+                    <a href="/logout" class="btn btn-outline-secondary btn-sm">
+                        <i class="bi bi-box-arrow-right"></i> 登出
+                    </a>
+                </div>
+                <ul class="nav nav-pills flex-column">
+                    <li class="nav-item">
+                        <a class="nav-link active" href="#" data-section="files">
+                            <i class="bi bi-files"></i> 文件管理
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="#" data-section="upload">
+                            <i class="bi bi-cloud-upload"></i> 上传文件
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="#" data-section="chat">
+                            <i class="bi bi-chat-dots"></i> 随心记录
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="#" data-section="notes">
+                            <i class="bi bi-journal-text"></i> 笔记
+                        </a>
+                    </li>
+                </ul>
+                
+                <hr>
+                
+                <!-- 移除侧边栏的筛选器，移到主内容区域 -->
+            </div>
+            
+            <!-- 主内容区 -->
+            <div class="col-md-9 col-lg-10 p-4">
+                <!-- 文件管理页面 -->
+                <div id="files-section" class="content-section">
+                    <div class="d-flex justify-content-between align-items-center mb-4">
+                        <h2>文件管理</h2>
+                        <div class="btn-group" role="group">
+                            <button type="button" class="btn btn-outline-secondary active" id="gridView">
+                                <i class="bi bi-grid-3x3-gap"></i> 网格
+                            </button>
+                            <button type="button" class="btn btn-outline-secondary" id="listView">
+                                <i class="bi bi-list-ul"></i> 列表
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <!-- 搜索和筛选栏 -->
+                    <div class="row mb-4">
+                        <div class="col-md-6">
+                            <div class="input-group">
+                                <span class="input-group-text"><i class="bi bi-search"></i></span>
+                                <input type="text" class="form-control" id="fileSearch" placeholder="搜索文件名称...">
+                                <button class="btn btn-outline-secondary" type="button" id="clearSearch">
+                                    <i class="bi bi-x"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="row">
+                                <div class="col-md-4">
+                                    <select class="form-select" id="fileTypeFilter">
+                                        <option value="">全部类型</option>
+                                        <option value="image">图片</option>
+                                        <option value="video">视频</option>
+                                        <option value="audio">音频</option>
+                                        <option value="document">文档</option>
+                                        <option value="archive">压缩文件</option>
+                                        <option value="code">代码文件</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-4">
+                                    <select class="form-select" id="fileSortBy">
+                                        <option value="upload_time">上传时间</option>
+                                        <option value="filename">文件名</option>
+                                        <option value="file_size">文件大小</option>
+                                        <option value="file_type">文件类型</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-4">
+                                    <select class="form-select" id="fileSortOrder">
+                                        <option value="desc">降序</option>
+                                        <option value="asc">升序</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- 文件统计信息 -->
+                    <div class="row mb-3">
+                        <div class="col-12">
+                            <div class="d-flex justify-content-between align-items-center text-muted small">
+                                <span id="fileStats">加载中...</span>
+                                <span id="fileCount">0 个文件</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- 文件容器 -->
+                    <div id="filesContainer">
+                        <!-- 文件将在这里动态加载 -->
+                    </div>
+                    
+                    <nav aria-label="文件分页">
+                        <ul class="pagination justify-content-center" id="filesPagination">
+                        </ul>
+                    </nav>
+                </div>
+                
+                <!-- 上传文件页面 -->
+                <div id="upload-section" class="content-section" style="display: none;">
+                    <h2 class="mb-4">上传文件</h2>
+                    
+                    <div class="row">
+                        <div class="col-md-8">
+                            <div class="upload-area" id="uploadArea">
+                                <i class="bi bi-cloud-upload display-1 text-muted"></i>
+                                <h4 class="mt-3">拖拽文件到这里或点击选择</h4>
+                                <p class="text-muted">支持图片、视频、文档等多种格式</p>
+                                <div class="mt-2">
+                                    <small class="text-info">
+                                        <i class="bi bi-info-circle"></i>
+                                        提示：也可使用 <kbd>Ctrl+V</kbd> 或 <kbd>Cmd+V</kbd> 粘贴剪贴板中的文件
+                                    </small>
+                                </div>
+                                <input type="file" id="fileInput" class="d-none" multiple>
+                                <button class="btn btn-primary mt-3" onclick="document.getElementById('fileInput').click()">
+                                    选择文件
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <div class="col-md-4">
+                            <div class="card">
+                                <div class="card-header">
+                                    <h5>存储信息</h5>
+                                </div>
+                                <div class="card-body">
+                                    <div class="mb-3">
+                                        <label class="form-label">当前存储方式</label>
+                                        <div class="form-control-plaintext bg-light p-2 rounded" id="currentStorageType">
+                                            <i class="bi bi-hdd"></i> 本地存储
+                                        </div>
+                                        <small class="text-muted">在项目配置中设置存储方式</small>
+                                    </div>
+                                    
+                                    <div class="mb-3">
+                                        <label class="form-label">支持格式</label>
+                                        <div class="small text-muted">
+                                            <div><i class="bi bi-image"></i> 图片: JPG, PNG, GIF, WebP</div>
+                                            <div><i class="bi bi-play-circle"></i> 视频: MP4, AVI, MOV, WebM</div>
+                                            <div><i class="bi bi-file-earmark"></i> 文档: PDF, DOC, TXT, 等</div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div id="uploadProgress" class="mt-4" style="display: none;">
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <h5 class="mb-0">上传进度</h5>
+                            <button class="btn btn-outline-secondary btn-sm" id="clearUploadHistory">
+                                <i class="bi bi-trash"></i> 清空历史
+                            </button>
+                        </div>
+                        <div id="uploadList"></div>
+                    </div>
+                </div>
+                
+                <!-- 随心记录页面 -->
+                <div id="chat-section" class="content-section" style="display: none;">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <h2>随心记录</h2>
+                    </div>
+                    
+                    <div class="chat-container">
+                        <!-- 聊天记录列表 -->
+                        <div class="chat-messages-container" id="chatMessagesContainer">
+                            <div id="chatMessages" class="chat-messages">
+                                <div class="text-center text-muted py-5">
+                                    <i class="bi bi-chat-dots" style="font-size: 3rem; opacity: 0.3;"></i>
+                                    <p class="mt-3">还没有记录，开始你的第一条随心记录吧！</p>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- 输入区域 -->
+                        <div class="chat-input-container">
+                            <div class="chat-input-wrapper" id="chatInputWrapper">
+                                <textarea class="chat-textarea" id="chatMessageContent" placeholder="写点什么...随心记录你的想法、生活、灵感..." rows="1"></textarea>
+                                <div class="chat-input-actions">
+                                    <button class="chat-action-btn" id="uploadFileBtn" title="上传文件">
+                                        <i class="bi bi-paperclip"></i>
+                                    </button>
+                                    <button class="chat-action-btn" id="uploadImageBtn" title="上传图片">
+                                        <i class="bi bi-image"></i>
+                                    </button>
+                                    <button class="chat-send-btn" id="sendChatMessage">
+                                        <i class="bi bi-send"></i> 发送
+                                    </button>
+                                </div>
+                            </div>
+                            <input type="file" id="chatFileUpload" class="d-none" multiple>
+                            <input type="file" id="chatImageUpload" class="d-none" accept="image/*" multiple>
+                        </div>
+                        
+                        <!-- 拖拽覆盖层 -->
+                        <div class="drag-overlay" id="dragOverlay">
+                            <div class="drag-overlay-content">
+                                <i class="bi bi-cloud-upload" style="font-size: 3rem; margin-bottom: 10px;"></i>
+                                <div>拖拽文件到这里上传</div>
+                            </div>
+                        </div>
+                        
+
+                    </div>
+                </div>
+                
+                <!-- 笔记页面 -->
+                <div id="notes-section" class="content-section" style="display: none;">
+                    <div class="d-flex justify-content-between align-items-center mb-4">
+                        <h2>笔记</h2>
+                        <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#noteModal">
+                            <i class="bi bi-plus"></i> 新建笔记
+                        </button>
+                    </div>
+                    
+                    <div id="notesContainer">
+                        <!-- 笔记列表将在这里动态加载 -->
+                    </div>
+                    
+                    <nav aria-label="笔记分页">
+                        <ul class="pagination justify-content-center" id="notesPagination">
+                        </ul>
+                    </nav>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 笔记编辑模态框 -->
+    <div class="modal fade" id="noteModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">编辑笔记</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="noteForm">
+                        <input type="hidden" id="noteId">
+                        <div class="mb-3">
+                            <label class="form-label">标题</label>
+                            <input type="text" class="form-control" id="noteTitle" required>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">内容</label>
+                            <textarea class="form-control" id="noteContent" rows="10" required></textarea>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">标签</label>
+                            <input type="text" class="form-control" id="noteTags" placeholder="用逗号分隔多个标签">
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                    <button type="button" class="btn btn-primary" id="saveNote">保存</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 文件预览模态框 -->
+    <div class="modal fade" id="previewModal" tabindex="-1">
+        <div class="modal-dialog modal-xl">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="previewTitle">文件预览</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body text-center">
+                    <div id="previewContent"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 文件分享模态框 -->
+    <div class="modal fade" id="shareModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">分享文件</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="shareForm">
+                        <input type="hidden" id="shareFileId">
+                        <div class="mb-3">
+                            <label class="form-label">有效时间</label>
+                            <select class="form-select" id="expiresHours">
+                                <option value="1">1小时</option>
+                                <option value="6">6小时</option>
+                                <option value="24">24小时</option>
+                                <option value="168" selected>7天</option>
+                                <option value="720">1个月</option>
+                                <option value="2160">3个月</option>
+                                <option value="4320">6个月</option>
+                                <option value="8760">1年</option>
+                                <option value="0">永久</option>
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">访问次数限制</label>
+                            <select class="form-select" id="maxAccess">
+                                <option value="0" selected>无限制</option>
+                                <option value="1">1次</option>
+                                <option value="5">5次</option>
+                                <option value="10">10次</option>
+                                <option value="50">50次</option>
+                                <option value="100">100次</option>
+                            </select>
+                        </div>
+                    </form>
+                    
+                    <div id="shareResult" style="display: none;">
+                        <div class="alert alert-info">
+                            <h6 class="mb-3">分享链接</h6>
+                            
+                            <!-- 直接链接 -->
+                            <div class="mb-3">
+                                <label class="form-label fw-bold">直接链接</label>
+                                <div class="input-group">
+                                    <input type="text" class="form-control" id="shareUrl" readonly>
+                                    <button class="btn btn-outline-secondary" type="button" onclick="copyToClipboard('shareUrl')">
+                                        <i class="bi bi-clipboard"></i>
+                                    </button>
+                                </div>
+                            </div>
+                            
+                            <!-- Markdown 格式 -->
+                            <div class="mb-3">
+                                <label class="form-label fw-bold">Markdown</label>
+                                <div class="input-group">
+                                    <input type="text" class="form-control" id="shareMarkdown" readonly>
+                                    <button class="btn btn-outline-secondary" type="button" onclick="copyToClipboard('shareMarkdown')">
+                                        <i class="bi bi-clipboard"></i>
+                                    </button>
+                                </div>
+                            </div>
+                            
+                            <!-- HTML 格式 -->
+                            <div class="mb-3">
+                                <label class="form-label fw-bold">HTML</label>
+                                <div class="input-group">
+                                    <input type="text" class="form-control" id="shareHtml" readonly>
+                                    <button class="btn btn-outline-secondary" type="button" onclick="copyToClipboard('shareHtml')">
+                                        <i class="bi bi-clipboard"></i>
+                                    </button>
+                                </div>
+                            </div>
+                            
+                            <!-- BBCode 格式 -->
+                            <div class="mb-3">
+                                <label class="form-label fw-bold">BBCode</label>
+                                <div class="input-group">
+                                    <input type="text" class="form-control" id="shareBBCode" readonly>
+                                    <button class="btn btn-outline-secondary" type="button" onclick="copyToClipboard('shareBBCode')">
+                                        <i class="bi bi-clipboard"></i>
+                                    </button>
+                                </div>
+                            </div>
+                            
+                            <!-- 一键复制所有格式 -->
+                            <div class="text-center">
+                                <button class="btn btn-primary btn-sm" onclick="copyAllFormats()">
+                                    <i class="bi bi-clipboard-check"></i> 一键复制所有格式
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                    <button type="button" class="btn btn-primary" id="createShareBtn">创建分享链接</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="/static/app.js"></script>
+</body>
+</html>
