@@ -7,18 +7,18 @@
 #### 1. 基本部署
 ```bash
 # 构建镜像
-docker build -t solocloud .
+docker build -t SoloCloud .
 
 # 运行容器
 docker run -d \
-  --name solocloud \
+  --name SoloCloud \
   -p 8080:8080 \
   -v $(pwd)/data:/app/data \
   -v $(pwd)/uploads:/app/uploads \
   -v $(pwd)/logs:/app/logs \
   -e FLASK_ENV=production \
   -e SECRET_KEY=your-super-secret-key-here \
-  solocloud
+  SoloCloud
 ```
 
 #### 2. 使用 Docker Compose
@@ -73,17 +73,17 @@ chmod +x start.sh
 #### 4. 使用 systemd 管理服务
 ```bash
 # 复制服务文件
-sudo cp solocloud.service /etc/systemd/system/
+sudo cp SoloCloud.service /etc/systemd/system/
 
 # 重新加载 systemd
 sudo systemctl daemon-reload
 
 # 启动服务
-sudo systemctl start solocloud
-sudo systemctl enable solocloud
+sudo systemctl start SoloCloud
+sudo systemctl enable SoloCloud
 
 # 查看状态
-sudo systemctl status solocloud
+sudo systemctl status SoloCloud
 ```
 
 ## ⚙️ 环境配置
@@ -95,11 +95,11 @@ FLASK_ENV=production
 SECRET_KEY=your-super-secret-key-here
 
 # 数据库配置
-DATABASE_URL=sqlite:///data/solocloud.db
+DATABASE_URL=sqlite:///data/SoloCloud.db
 
 # 日志配置
 LOG_LEVEL=WARNING
-LOG_FILE=/var/log/solocloud/solocloud.log
+LOG_FILE=/var/log/SoloCloud/SoloCloud.log
 
 # 存储配置
 STORAGE_PROVIDER=local
@@ -124,10 +124,10 @@ TENCENT_COS_BUCKET_NAME=your-bucket
 ## 📊 监控和日志
 
 ### 日志文件位置
-- **应用日志**: `/var/log/solocloud/solocloud.log`
-- **错误日志**: `/var/log/solocloud/solocloud_error.log`
-- **安全日志**: `/var/log/solocloud/solocloud_security.log`
-- **JSON日志**: `/var/log/solocloud/solocloud.json`
+- **应用日志**: `/var/log/SoloCloud/SoloCloud.log`
+- **错误日志**: `/var/log/SoloCloud/solocloud_error.log`
+- **安全日志**: `/var/log/SoloCloud/solocloud_security.log`
+- **JSON日志**: `/var/log/SoloCloud/SoloCloud.json`
 
 ### 健康检查
 ```bash
@@ -146,13 +146,13 @@ curl http://localhost:8080/health
 ### 日志监控
 ```bash
 # 实时查看应用日志
-tail -f /var/log/solocloud/solocloud.log
+tail -f /var/log/SoloCloud/SoloCloud.log
 
 # 查看错误日志
-tail -f /var/log/solocloud/solocloud_error.log
+tail -f /var/log/SoloCloud/solocloud_error.log
 
 # 查看安全事件
-tail -f /var/log/solocloud/solocloud_security.log
+tail -f /var/log/SoloCloud/solocloud_security.log
 ```
 
 ## 🔒 安全配置
@@ -193,7 +193,7 @@ tar -czf /backup/solocloud_$DATE.tar.gz /app/data /app/uploads
 对于大量文件的情况，考虑使用 PostgreSQL：
 ```bash
 # 环境变量
-DATABASE_URL=postgresql://user:password@localhost/solocloud
+DATABASE_URL=postgresql://user:password@localhost/SoloCloud
 ```
 
 ### 3. 静态文件服务
@@ -213,9 +213,9 @@ location /static/ {
 1. **应用无法启动**
    ```bash
    # 检查日志
-   docker logs solocloud
+   docker logs SoloCloud
    # 或
-   journalctl -u solocloud -f
+   journalctl -u SoloCloud -f
    ```
 
 2. **数据库连接失败**
@@ -237,13 +237,13 @@ location /static/ {
 4. **日志文件过大**
    ```bash
    # 日志会自动轮转，但可以手动清理
-   sudo logrotate -f /etc/logrotate.d/solocloud
+   sudo logrotate -f /etc/logrotate.d/SoloCloud
    ```
 
 ### 性能监控
 ```bash
 # 查看资源使用情况
-docker stats solocloud
+docker stats SoloCloud
 
 # 查看进程状态
 ps aux | grep gunicorn
