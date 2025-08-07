@@ -1151,11 +1151,22 @@ def shared_file(token):
     
     # 如果是图片或视频，直接返回文件
     if media_file.file_type in ['image', 'video']:
-        if media_file.storage_type == 'local':
-            return send_file(media_file.file_path)
-        else:
-            # 对于OSS文件，这里需要实现OSS文件访问
-            return jsonify({'error': 'OSS文件访问功能待实现'}), 501
+        try:
+            if media_file.storage_type == 'local':
+                return send_file(media_file.file_path)
+            else:
+                # 对于云存储文件，使用storage_manager生成访问URL
+                storage = storage_manager.get_storage(media_file.storage_type)
+                if not storage:
+                    return render_template('error.html', error=f'不支持的存储类型: {media_file.storage_type}'), 500
+                
+                url = storage.get_file_url(media_file.file_path)
+                if url:
+                    return redirect(url)
+                else:
+                    return render_template('error.html', error='无法生成文件访问URL'), 500
+        except Exception as e:
+            return render_template('error.html', error=f'文件访问失败: {str(e)}'), 500
     else:
         # 对于其他文件类型，显示下载页面
         return render_template('shared_file.html', file=media_file, share_link=share_link)

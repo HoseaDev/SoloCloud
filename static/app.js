@@ -16,25 +16,10 @@ function formatFileSize(bytes) {
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
 }
 
-// 显示粘贴通知
+// 显示粘贴通知 - 使用toast通知系统
 function showPasteNotification(fileCount) {
-    const notification = document.createElement('div');
-    notification.className = 'alert alert-info alert-dismissible fade show position-fixed';
-    notification.style.cssText = 'top: 20px; right: 20px; z-index: 9999; min-width: 300px;';
-    notification.innerHTML = `
-        <i class="bi bi-clipboard-check"></i>
-        <strong>粘贴成功！</strong> 已从剪贴板粘贴 ${fileCount} 个文件
-        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-    `;
-    
-    document.body.appendChild(notification);
-    
-    // 3秒后自动消失
-    setTimeout(() => {
-        if (notification.parentNode) {
-            notification.remove();
-        }
-    }, 3000);
+    const message = `粘贴成功！已从剪贴板粘贴 ${fileCount} 个文件`;
+    showToast(message, 'success', 3000);
 }
 
 // 加载存储配置信息
@@ -658,7 +643,7 @@ function deleteFile(fileId) {
     fetch(`/api/files/${fileId}`, { method: 'DELETE' })
         .then(response => response.json())
         .then(data => {
-            showAlert(data.message, 'success');
+            showToast(data.message, 'success');
             loadFiles();
         });
 }
@@ -697,19 +682,18 @@ function createShareLink() {
             document.getElementById('shareUrl').value = shareUrl;
             document.getElementById('shareMarkdown').value = `![${filename}](${shareUrl})`;
             document.getElementById('shareHtml').value = `<img src="${shareUrl}" alt="${filename}" />`;
-            document.getElementById('shareBBCode').value = `[img]${shareUrl}[/img]`;
             
             // 显示结果区域，隐藏表单
             document.getElementById('shareResult').style.display = 'block';
             document.getElementById('shareForm').style.display = 'none';
             document.getElementById('createShareBtn').style.display = 'none';
         } else {
-            showAlert(data.error || '创建分享链接失败', 'danger');
+            showToast(data.error || '创建分享链接失败', 'error');
         }
     })
     .catch(error => {
         console.error('创建分享链接失败:', error);
-        showAlert('创建分享链接失败', 'danger');
+        showToast('创建分享链接失败', 'error');
     });
 }
 
@@ -726,48 +710,14 @@ function copyToClipboard(elementId) {
     
     try {
         document.execCommand('copy');
-        showAlert('已复制到剪贴板', 'success');
+        showToast('已复制到剪贴板', 'success');
     } catch (err) {
         console.error('复制失败:', err);
-        showAlert('复制失败', 'danger');
+        showToast('复制失败', 'error');
     }
 }
 
-// 一键复制所有格式
-function copyAllFormats() {
-    const shareUrl = document.getElementById('shareUrl').value;
-    const shareMarkdown = document.getElementById('shareMarkdown').value;
-    const shareHtml = document.getElementById('shareHtml').value;
-    const shareBBCode = document.getElementById('shareBBCode').value;
-    
-    const allFormats = `直接链接:
-${shareUrl}
 
-Markdown:
-${shareMarkdown}
-
-HTML:
-${shareHtml}
-
-BBCode:
-${shareBBCode}`;
-    
-    // 创建临时文本区域来复制
-    const tempTextArea = document.createElement('textarea');
-    tempTextArea.value = allFormats;
-    document.body.appendChild(tempTextArea);
-    tempTextArea.select();
-    
-    try {
-        document.execCommand('copy');
-        showAlert('所有格式已复制到剪贴板', 'success');
-    } catch (err) {
-        console.error('复制失败:', err);
-        showAlert('复制失败', 'danger');
-    } finally {
-        document.body.removeChild(tempTextArea);
-    }
-}
 
 // 兼容性函数（保持旧的函数名）
 function copyShareUrl() {
@@ -777,7 +727,7 @@ function copyShareUrl() {
 // 旧的错误处理代码（保持兼容性）
 function handleCopyError(err) {
     console.error('复制失败:', err);
-    showAlert('复制失败，请手动复制', 'warning');
+    showToast('复制失败，请手动复制', 'warning');
 }
 
 // 笔记功能
@@ -857,7 +807,7 @@ function saveNote() {
     })
     .then(response => response.json())
     .then(result => {
-        showAlert(result.message, 'success');
+        showToast(result.message, 'success');
         bootstrap.Modal.getInstance(document.getElementById('noteModal')).hide();
         loadNotes();
     });
@@ -869,7 +819,7 @@ function deleteNote(noteId) {
     fetch(`/api/notes/${noteId}`, { method: 'DELETE' })
         .then(response => response.json())
         .then(data => {
-            showAlert(data.message, 'success');
+            showToast(data.message, 'success');
             loadNotes();
         });
 }
@@ -877,6 +827,67 @@ function deleteNote(noteId) {
 function showAlert(message, type) {
     // 简单的提示实现
     alert(message);
+}
+
+// 新的toast通知系统
+function showToast(message, type = 'success', duration = 3000) {
+    // 创建通知元素
+    const toast = document.createElement('div');
+    toast.className = `toast-notification toast-${type}`;
+    toast.style.cssText = `
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        z-index: 9999;
+        padding: 12px 20px;
+        border-radius: 6px;
+        color: white;
+        font-weight: 500;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        transform: translateX(100%);
+        transition: transform 0.3s ease-in-out, opacity 0.3s ease-in-out;
+        opacity: 0;
+        max-width: 300px;
+        word-wrap: break-word;
+    `;
+    
+    // 根据类型设置颜色
+    if (type === 'success') {
+        toast.style.backgroundColor = '#28a745';
+    } else if (type === 'danger' || type === 'error') {
+        toast.style.backgroundColor = '#dc3545';
+    } else if (type === 'warning') {
+        toast.style.backgroundColor = '#ffc107';
+        toast.style.color = '#212529';
+    } else {
+        toast.style.backgroundColor = '#17a2b8';
+    }
+    
+    // 添加图标和文本
+    const icon = type === 'success' ? '✓' : (type === 'error' || type === 'danger') ? '✗' : 'i';
+    toast.innerHTML = `<span style="margin-right: 8px;">${icon}</span>${message}`;
+    
+    // 添加到页面
+    document.body.appendChild(toast);
+    
+    // 显示动画
+    setTimeout(() => {
+        toast.style.transform = 'translateX(0)';
+        toast.style.opacity = '1';
+    }, 10);
+    
+    // 自动隐藏
+    setTimeout(() => {
+        toast.style.transform = 'translateX(100%)';
+        toast.style.opacity = '0';
+        
+        // 移除元素
+        setTimeout(() => {
+            if (toast.parentNode) {
+                document.body.removeChild(toast);
+            }
+        }, 300);
+    }, duration);
 }
 
 // 聊天记录模块功能
@@ -1041,12 +1052,12 @@ function sendTextMessage() {
             loadChatMessages(); // 重新加载消息列表
             scrollChatToBottom(); // 滚动到底部
         } else {
-            showAlert(data.error || '发送失败', 'danger');
+            showToast(data.error || '发送失败', 'error');
         }
     })
     .catch(error => {
         console.error('发送消息失败:', error);
-        showAlert('发送失败', 'danger');
+        showToast('发送失败', 'error');
     })
     .finally(() => {
         // 恢复发送按钮
@@ -1088,14 +1099,14 @@ function handleChatFiles(files) {
                 }
             } else {
                 hasErrors = true;
-                showAlert(`${file.name}: ${data.error || '上传失败'}`, 'danger');
+                showToast(`${file.name}: ${data.error || '上传失败'}`, 'error');
             }
         })
         .catch(error => {
             uploadedCount++;
             hasErrors = true;
             console.error('文件上传失败:', error);
-            showAlert(`${file.name} 上传失败`, 'danger');
+            showToast(`${file.name} 上传失败`, 'error');
         });
     });
 }
@@ -1239,12 +1250,12 @@ function deleteChatMessage(messageId) {
     fetch(`/api/chat/messages/${messageId}`, { method: 'DELETE' })
         .then(response => response.json())
         .then(data => {
-            showAlert(data.message, 'success');
+            showToast(data.message, 'success');
             loadChatMessages(); // 重新加载消息列表
         })
         .catch(error => {
             console.error('删除消息失败:', error);
-            showAlert('删除失败', 'danger');
+            showToast('删除失败', 'error');
         });
 }
 
