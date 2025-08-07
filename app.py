@@ -19,6 +19,70 @@ from cloud_storage import storage_manager, STORAGE_PROVIDERS
 # 加载环境变量
 load_dotenv()
 
+# 简单的防暴力登录保护
+login_attempts = {}  # {ip: {'count': int, 'last_attempt': datetime, 'blocked_until': datetime}}
+
+def is_ip_blocked(ip):
+    """检查IP是否被封禁"""
+    if ip not in login_attempts:
+        return False
+    
+    attempt_info = login_attempts[ip]
+    
+    # 检查是否还在封禁期内
+    if 'blocked_until' in attempt_info and attempt_info['blocked_until'] > datetime.now():
+        return True
+    
+    # 检查是否需要重置计数器（超过15分钟重置）
+    if 'last_attempt' in attempt_info:
+        if datetime.now() - attempt_info['last_attempt'] > timedelta(minutes=15):
+            login_attempts[ip] = {'count': 0}
+    
+    return False
+
+def record_failed_login(ip):
+    """记录登录失败"""
+    if ip not in login_attempts:
+        login_attempts[ip] = {'count': 0}
+    
+    login_attempts[ip]['count'] += 1
+    login_attempts[ip]['last_attempt'] = datetime.now()
+    
+    # 5次失败后封禁30分钟
+    if login_attempts[ip]['count'] >= 5:
+        login_attempts[ip]['blocked_until'] = datetime.now() + timedelta(minutes=30)
+
+def get_remaining_attempts(ip):
+    """获取剩余尝试次数"""
+    if ip not in login_attempts:
+        return 5
+    return max(0, 5 - login_attempts[ip]['count'])
+
+def ensure_single_user_system():
+    """确保系统为单用户模式，如果有多个用户则只保留第一个"""
+    users = User.query.all()
+    if len(users) > 1:
+        print(f"⚠️  检测到多个用户（{len(users)}个），正在清理为单用户系统...")
+        # 保留第一个用户，删除其他用户
+        first_user = users[0]
+        for user in users[1:]:
+            print(f"删除用户: {user.username}")
+            db.session.delete(user)
+        db.session.commit()
+        print(f"✅ 已清理为单用户系统，保留用户: {first_user.username}")
+    elif len(users) == 1:
+        print(f"✅ 单用户系统正常，当前用户: {users[0].username}")
+    else:
+        print("🔄 系统无用户，等待首次设置")
+
+def check_single_user_limit():
+    """检查是否超过单用户限制"""
+    return User.query.count() >= 1
+
+def get_solo_user():
+    """获取系统中的唯一用户"""
+    return User.query.first()
+
 app = Flask(__name__)
 CORS(app)
 
@@ -384,7 +448,7 @@ def index():
 
 @app.route('/first-time-setup', methods=['GET', 'POST'])
 def first_time_setup():
-    # 如果已经有用户，重定向到登录页
+    # SoloCloud为单用户系统，如果已经有用户，禁止访问此页面
     if User.query.count() > 0:
         return redirect(url_for('login'))
     
@@ -403,14 +467,23 @@ def first_time_setup():
         if password != confirm_password:
             return render_template('first_time_setup.html', error='密码不一致')
         
-        # 创建用户
+        # 双重检查：确保系统中没有其他用户（单用户系统保护）
+        if User.query.count() > 0:
+            return render_template('first_time_setup.html', error='系统已有用户，SoloCloud为单用户系统')
+        
+        # 创建唯一用户
         user = User(
             username=username, 
             email=f'{username}@solocloud.local'  # 自动生成邮箱
         )
         user.set_password(password)
-        db.session.add(user)
-        db.session.commit()
+        
+        try:
+            db.session.add(user)
+            db.session.commit()
+        except Exception as e:
+            db.session.rollback()
+            return render_template('first_time_setup.html', error='用户创建失败，请重试')
         
         # 自动登录
         login_user(user)
@@ -425,25 +498,58 @@ def login():
         return redirect(url_for('first_time_setup'))
     
     if request.method == 'POST':
+        ip = request.remote_addr
+        
+        # 检查IP是否被封禁
+        if is_ip_blocked(ip):
+            if ip in login_attempts and 'blocked_until' in login_attempts[ip]:
+                remaining_time = login_attempts[ip]['blocked_until'] - datetime.now()
+                minutes = int(remaining_time.total_seconds() / 60)
+                return render_template('login.html', error=f'登录失败次数过多，请等待 {minutes} 分钟后再试')
+            return render_template('login.html', error='您的IP已被暂时封禁，请稍后再试')
+        
         username = request.form.get('username', '').strip()
         password = request.form.get('password', '')
         
         if not username or not password:
-            return render_template('login.html', error='请输入用户名和密码')
+            record_failed_login(ip)
+            remaining = get_remaining_attempts(ip)
+            return render_template('login.html', error=f'请输入用户名和密码（剩余尝试次数：{remaining}）')
         
         user = User.query.filter_by(username=username).first()
         
         if user and user.check_password(password):
+            # 登录成功，清除失败记录
+            if ip in login_attempts:
+                login_attempts[ip] = {'count': 0}
             login_user(user)
             next_page = request.args.get('next')
             return redirect(next_page) if next_page else redirect(url_for('index'))
         else:
-            return render_template('login.html', error='用户名或密码错误')
+            record_failed_login(ip)
+            remaining = get_remaining_attempts(ip)
+            if remaining > 0:
+                return render_template('login.html', error=f'用户名或密码错误（剩余尝试次数：{remaining}）')
+            else:
+                return render_template('login.html', error='登录失败次数过多，已被封禁30分钟')
     
     return render_template('login.html')
 
+# 单用户系统保护装饰器
+def single_user_only(f):
+    """装饰器：确保只有在单用户系统中才能访问某些功能"""
+    from functools import wraps
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if User.query.count() > 1:
+            # 如果有多个用户，自动清理
+            ensure_single_user_system()
+        return f(*args, **kwargs)
+    return decorated_function
+
 @app.route('/change-password', methods=['GET', 'POST'])
 @login_required
+@single_user_only
 def change_password():
     if request.method == 'POST':
         current_password = request.form['current_password']
@@ -1253,11 +1359,7 @@ if __name__ == '__main__':
             db.drop_all()
             db.create_all()
         
-        # 检查用户数量
-        user_count = User.query.count()
-        if user_count == 0:
-            print("🔧 首次启动，等待用户设置账号密码")
-        else:
-            print(f"👤 系统已有 {user_count} 个用户")
+        # 确保单用户系统
+        ensure_single_user_system()
     
     app.run(debug=True, host='0.0.0.0', port=8080)
