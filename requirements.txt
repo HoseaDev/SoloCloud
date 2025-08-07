@@ -19,6 +19,10 @@ oss2==2.18.1
 # 腾讯云COS
 cos-python-sdk-v5==1.9.24
 
+# 生产环境部署
+gunicorn==21.2.0
+gevent==23.7.0
+
 # 七牛云
 qiniu==7.12.0
 

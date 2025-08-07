@@ -1,17 +1,23 @@
-from flask import Flask, request, jsonify, send_file, render_template, redirect, url_for, session
+from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, send_file, abort, session
 from flask_sqlalchemy import SQLAlchemy
-from flask_cors import CORS
-from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user
-from werkzeug.utils import secure_filename
+from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
+from werkzeug.utils import secure_filename
+from datetime import datetime, timedelta
 import os
 import uuid
-from datetime import datetime, timedelta
+import mimetypes
+import json
+from PIL import Image
 import cv2
 import numpy as np
-from PIL import Image
+from cloud_storage import CloudStorageManager
 from dotenv import load_dotenv
-import mimetypes
+
+# 导入新的配置和错误处理模块
+from config import config
+from logging_config import SoloCloudLogger, get_logger, log_user_action, log_security_event, log_system_event
+from error_handlers import init_error_handlers
 import jwt
 import secrets
 from cloud_storage import storage_manager, STORAGE_PROVIDERS
@@ -42,15 +48,31 @@ def is_ip_blocked(ip):
 
 def record_failed_login(ip):
     """记录登录失败"""
+    now = datetime.now()
+    
     if ip not in login_attempts:
         login_attempts[ip] = {'count': 0}
     
     login_attempts[ip]['count'] += 1
-    login_attempts[ip]['last_attempt'] = datetime.now()
+    login_attempts[ip]['last_attempt'] = now
     
-    # 5次失败后封禁30分钟
+    # 记录安全事件
+    log_security_event(
+        f"登录失败尝试 ({login_attempts[ip]['count']}/5)",
+        ip_address=ip,
+        details=f"累计失败次数: {login_attempts[ip]['count']}"
+    )
+    
+    # 如果失败次数达到5次，封禁30分钟
     if login_attempts[ip]['count'] >= 5:
-        login_attempts[ip]['blocked_until'] = datetime.now() + timedelta(minutes=30)
+        login_attempts[ip]['blocked_until'] = now + timedelta(minutes=30)
+        log_security_event(
+            "IP地址被封禁",
+            ip_address=ip,
+            details="连续5次登录失败，封禁30分钟",
+            level='error'
+        )
+        print(f"IP {ip} 因多次登录失败被封禁30分钟")
 
 def get_remaining_attempts(ip):
     """获取剩余尝试次数"""
@@ -83,20 +105,45 @@ def get_solo_user():
     """获取系统中的唯一用户"""
     return User.query.first()
 
-app = Flask(__name__)
-CORS(app)
+def create_app(config_name=None):
+    """应用工厂函数"""
+    app = Flask(__name__)
+    
+    # 加载配置
+    config_name = config_name or os.getenv('FLASK_ENV', 'development')
+    app.config.from_object(config[config_name])
+    
+    # 初始化扩展
+    db.init_app(app)
+    login_manager.init_app(app)
+    
+    # 初始化日志系统
+    logger_instance = SoloCloudLogger()
+    logger_instance.init_app(app)
+    
+    # 初始化错误处理
+    init_error_handlers(app)
+    
+    # 添加健康检查路由
+    @app.route('/health')
+    def health_check():
+        return jsonify({
+            'status': 'healthy',
+            'timestamp': datetime.utcnow().isoformat(),
+            'version': '1.0.0',
+            'environment': config_name
+        })
+    
+    return app
 
-# 配置
-app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'your-secret-key-here')
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///solocloud.db'
-app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-app.config['MAX_CONTENT_LENGTH'] = 100 * 1024 * 1024  # 100MB max file size
-
-# 初始化Flask-Login
+# 初始化扩展
+db = SQLAlchemy()
 login_manager = LoginManager()
-login_manager.init_app(app)
 login_manager.login_view = 'login'
 login_manager.login_message = '请先登录访问此页面'
+
+# 创建应用实例
+app = create_app()
 
 # 本地存储配置
 UPLOAD_FOLDER = 'uploads'
@@ -133,8 +180,7 @@ CLOUD_STORAGE_CONFIGS = {
     }
 }
 
-# 初始化数据库
-db = SQLAlchemy(app)
+# 数据库已在create_app函数中初始化
 
 # 确保上传目录存在
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
@@ -522,6 +568,15 @@ def login():
             # 登录成功，清除失败记录
             if ip in login_attempts:
                 login_attempts[ip] = {'count': 0}
+            
+            # 记录成功登录
+            log_user_action(
+                "用户登录",
+                user_id=user.id,
+                ip_address=ip,
+                details=f"用户 {username} 成功登录"
+            )
+            
             login_user(user)
             next_page = request.args.get('next')
             return redirect(next_page) if next_page else redirect(url_for('index'))

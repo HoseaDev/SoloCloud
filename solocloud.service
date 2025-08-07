@@ -1,0 +1,25 @@
+[Unit]
+Description=SoloCloud Personal Cloud Storage
+After=network.target
+
+[Service]
+Type=notify
+User=solocloud
+Group=solocloud
+WorkingDirectory=/opt/solocloud
+Environment=FLASK_ENV=production
+Environment=FLASK_APP=app.py
+ExecStart=/opt/solocloud/venv/bin/gunicorn --config gunicorn.conf.py app:app
+ExecReload=/bin/kill -s HUP $MAINPID
+Restart=always
+RestartSec=10
+KillMode=mixed
+TimeoutStopSec=5
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/solocloud /var/log/solocloud /var/run/solocloud
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target
