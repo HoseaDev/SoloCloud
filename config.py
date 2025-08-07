@@ -47,7 +47,7 @@ class ProductionConfig(Config):
     
     # 生产环境日志
     LOG_LEVEL = 'WARNING'
-    LOG_FILE = '/var/log/SoloCloud/SoloCloud.log'
+    LOG_FILE = '/app/logs/SoloCloud.log'
 
 class TestingConfig(Config):
     """测试环境配置"""
