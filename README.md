@@ -62,7 +62,7 @@
 
 ```bash
 # 1. 克隆项目
-git clone https://github.com/your-username/solocloud.git
+git clone https://github.com/HoseaDev/SoloCloud.git
 cd solocloud
 
 # 2. 配置环境变量
