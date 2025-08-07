@@ -45,7 +45,7 @@ class SoloCloudLogger:
     def init_app(self, app):
         """初始化日志系统"""
         # 创建日志目录
-        log_dir = os.path.dirname(app.config.get('LOG_FILE', 'logs/solocloud.log'))
+        log_dir = os.path.dirname(app.config.get('LOG_FILE', 'logs/SoloCloud.log'))
         os.makedirs(log_dir, exist_ok=True)
         
         # 设置根日志级别
@@ -69,7 +69,7 @@ class SoloCloudLogger:
         
         # 文件处理器（详细日志）
         file_handler = logging.handlers.RotatingFileHandler(
-            app.config.get('LOG_FILE', 'logs/solocloud.log'),
+            app.config.get('LOG_FILE', 'logs/SoloCloud.log'),
             maxBytes=app.config.get('LOG_MAX_BYTES', 10*1024*1024),
             backupCount=app.config.get('LOG_BACKUP_COUNT', 5),
             encoding='utf-8'
@@ -78,7 +78,7 @@ class SoloCloudLogger:
         file_handler.setFormatter(detailed_formatter)
         
         # JSON日志处理器（结构化日志）
-        json_log_file = app.config.get('LOG_FILE', 'logs/solocloud.log').replace('.log', '.json')
+        json_log_file = app.config.get('LOG_FILE', 'logs/SoloCloud.log').replace('.log', '.json')
         json_handler = logging.handlers.RotatingFileHandler(
             json_log_file,
             maxBytes=app.config.get('LOG_MAX_BYTES', 10*1024*1024),
@@ -89,7 +89,7 @@ class SoloCloudLogger:
         json_handler.setFormatter(json_formatter)
         
         # 错误日志处理器
-        error_log_file = app.config.get('LOG_FILE', 'logs/solocloud.log').replace('.log', '_error.log')
+        error_log_file = app.config.get('LOG_FILE', 'logs/SoloCloud.log').replace('.log', '_error.log')
         error_handler = logging.handlers.RotatingFileHandler(
             error_log_file,
             maxBytes=app.config.get('LOG_MAX_BYTES', 10*1024*1024),
@@ -100,7 +100,7 @@ class SoloCloudLogger:
         error_handler.setFormatter(detailed_formatter)
         
         # 安全日志处理器
-        security_log_file = app.config.get('LOG_FILE', 'logs/solocloud.log').replace('.log', '_security.log')
+        security_log_file = app.config.get('LOG_FILE', 'logs/SoloCloud.log').replace('.log', '_security.log')
         security_handler = logging.handlers.RotatingFileHandler(
             security_log_file,
             maxBytes=app.config.get('LOG_MAX_BYTES', 10*1024*1024),
@@ -111,7 +111,7 @@ class SoloCloudLogger:
         security_handler.setFormatter(detailed_formatter)
         
         # 配置应用日志记录器
-        app_logger = logging.getLogger('solocloud')
+        app_logger = logging.getLogger('SoloCloud')
         app_logger.setLevel(log_level)
         app_logger.addHandler(console_handler)
         app_logger.addHandler(file_handler)
@@ -119,7 +119,7 @@ class SoloCloudLogger:
         app_logger.addHandler(error_handler)
         
         # 配置安全日志记录器
-        security_logger = logging.getLogger('solocloud.security')
+        security_logger = logging.getLogger('SoloCloud.security')
         security_logger.setLevel(logging.WARNING)
         security_logger.addHandler(security_handler)
         security_logger.addHandler(console_handler)
@@ -136,13 +136,13 @@ class SoloCloudLogger:
         
         app.logger.info("日志系统初始化完成")
 
-def get_logger(name='solocloud'):
+def get_logger(name='SoloCloud'):
     """获取日志记录器"""
     return logging.getLogger(name)
 
 def log_user_action(action, user_id=None, ip_address=None, details=None):
     """记录用户操作"""
-    logger = get_logger('solocloud.user_action')
+    logger = get_logger('SoloCloud.user_action')
     extra = {
         'action': action,
         'user_id': user_id,
@@ -155,7 +155,7 @@ def log_user_action(action, user_id=None, ip_address=None, details=None):
 
 def log_security_event(event, ip_address=None, details=None, level='warning'):
     """记录安全事件"""
-    logger = get_logger('solocloud.security')
+    logger = get_logger('SoloCloud.security')
     extra = {
         'action': 'security_event',
         'ip_address': ip_address
@@ -169,7 +169,7 @@ def log_security_event(event, ip_address=None, details=None, level='warning'):
 
 def log_system_event(event, details=None):
     """记录系统事件"""
-    logger = get_logger('solocloud.system')
+    logger = get_logger('SoloCloud.system')
     message = f"系统事件: {event}"
     if details:
         message += f" - {details}"

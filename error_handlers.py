@@ -166,7 +166,7 @@ def init_error_handlers(app):
         error_id = str(uuid.uuid4())[:8]
         
         # 记录详细错误信息
-        logger = logging.getLogger('solocloud.error')
+        logger = logging.getLogger('SoloCloud.error')
         logger.error(f"未处理异常 [{error_id}]: {str(error)}", extra={
             'error_id': error_id,
             'error_type': type(error).__name__,
@@ -195,7 +195,7 @@ def init_error_handlers(app):
 
 def log_error(error, error_id, error_type):
     """记录错误信息"""
-    logger = logging.getLogger('solocloud.error')
+    logger = logging.getLogger('SoloCloud.error')
     logger.error(f"{error_type} [{error_id}]: {str(error)}", extra={
         'error_id': error_id,
         'error_type': error_type,

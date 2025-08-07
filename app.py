@@ -520,7 +520,7 @@ def first_time_setup():
         # 创建唯一用户
         user = User(
             username=username, 
-            email=f'{username}@solocloud.local'  # 自动生成邮箱
+            email=f'{username}@SoloCloud.local'  # 自动生成邮箱
         )
         user.set_password(password)
         

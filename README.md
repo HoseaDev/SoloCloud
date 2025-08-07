@@ -63,7 +63,7 @@
 ```bash
 # 1. 克隆项目
 git clone https://github.com/HoseaDev/SoloCloud.git
-cd solocloud
+cd SoloCloud
 
 # 2. 配置环境变量
 cp .env.example .env
@@ -104,11 +104,11 @@ SECRET_KEY=af0705d30f1be97c76c6299c5eced10e3787d7d9a64a5cadfad88b4d75a400db
 FLASK_ENV=production
 
 # 数据库配置
-DATABASE_URL=sqlite:///data/solocloud.db
+DATABASE_URL=sqlite:///data/SoloCloud.db
 
 # 日志配置
 LOG_LEVEL=INFO
-LOG_FILE=logs/solocloud.log
+LOG_FILE=logs/SoloCloud.log
 ```
 
 #### 存储后端配置（可选）
@@ -190,7 +190,7 @@ chmod +x start.sh
 ./start.sh
 
 # 使用systemd管理（Linux）
-sudo systemctl start solocloud
+sudo systemctl start SoloCloud
 ```
 
 ---
@@ -346,7 +346,7 @@ SoloCloud/
 
 1. **文件大小限制**: 默认最大上传文件大小为1GB
 2. **OSS配置**: 如果不配置阿里云OSS，只能使用本地存储
-3. **数据库**: 默认使用SQLite，数据存储在 `solocloud.db` 文件中
+3. **数据库**: 默认使用SQLite，数据存储在 `SoloCloud.db` 文件中
 4. **安全性**: 生产环境请修改SECRET_KEY并使用HTTPS
 
 ## 扩展功能

@@ -4,7 +4,7 @@ from datetime import timedelta
 class Config:
     """基础配置"""
     SECRET_KEY = os.environ.get('SECRET_KEY') or 'dev-secret-key-change-in-production'
-    SQLALCHEMY_DATABASE_URI = os.environ.get('DATABASE_URL') or 'sqlite:///solocloud.db'
+    SQLALCHEMY_DATABASE_URI = os.environ.get('DATABASE_URL') or 'sqlite:///SoloCloud.db'
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     MAX_CONTENT_LENGTH = 1024 * 1024 * 1024  # 1GB max file size
     
@@ -22,7 +22,7 @@ class Config:
     
     # 日志配置
     LOG_LEVEL = os.environ.get('LOG_LEVEL') or 'INFO'
-    LOG_FILE = os.environ.get('LOG_FILE') or 'logs/solocloud.log'
+    LOG_FILE = os.environ.get('LOG_FILE') or 'logs/SoloCloud.log'
     LOG_MAX_BYTES = 10 * 1024 * 1024  # 10MB
     LOG_BACKUP_COUNT = 5
 
@@ -47,7 +47,7 @@ class ProductionConfig(Config):
     
     # 生产环境日志
     LOG_LEVEL = 'WARNING'
-    LOG_FILE = '/var/log/solocloud/solocloud.log'
+    LOG_FILE = '/var/log/SoloCloud/SoloCloud.log'
 
 class TestingConfig(Config):
     """测试环境配置"""

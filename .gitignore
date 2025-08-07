@@ -119,7 +119,7 @@ dmypy.json
 .pyre/
 
 # SoloCloud specific
-solocloud.db
+SoloCloud.db
 uploads/
 *.db
 *.sqlite

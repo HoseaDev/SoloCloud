@@ -22,15 +22,15 @@ RUN pip install gunicorn
 COPY . .
 
 # 创建必要的目录
-RUN mkdir -p logs uploads /var/log/solocloud /var/run/solocloud
+RUN mkdir -p logs uploads /var/log/SoloCloud /var/run/SoloCloud
 
 # 设置权限
 RUN chmod +x start.sh
 
 # 创建非root用户
-RUN useradd --create-home --shell /bin/bash solocloud
-RUN chown -R solocloud:solocloud /app
-USER solocloud
+RUN useradd --create-home --shell /bin/bash SoloCloud
+RUN chown -R SoloCloud:SoloCloud /app
+USER SoloCloud
 
 # 暴露端口
 EXPOSE 8080

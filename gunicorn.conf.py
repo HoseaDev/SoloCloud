@@ -16,8 +16,8 @@ max_requests_jitter = 50
 preload_app = True
 
 # 日志配置
-accesslog = "/var/log/solocloud/access.log"
-errorlog = "/var/log/solocloud/error.log"
+accesslog = "/var/log/SoloCloud/access.log"
+errorlog = "/var/log/SoloCloud/error.log"
 loglevel = "info"
 access_log_format = '%(h)s %(l)s %(u)s %(t)s "%(r)s" %(s)s %(b)s "%(f)s" "%(a)s" %(D)s'
 
@@ -27,14 +27,14 @@ limit_request_fields = 100
 limit_request_field_size = 8190
 
 # 进程名称
-proc_name = "solocloud"
+proc_name = "SoloCloud"
 
 # 用户和组（生产环境中设置）
-# user = "solocloud"
-# group = "solocloud"
+# user = "SoloCloud"
+# group = "SoloCloud"
 
 # PID文件
-pidfile = "/var/run/solocloud/solocloud.pid"
+pidfile = "/var/run/SoloCloud/SoloCloud.pid"
 
 # 临时目录
 tmp_upload_dir = None
