@@ -9,6 +9,7 @@ RUN apt-get update && apt-get install -y \
     g++ \
     libffi-dev \
     libssl-dev \
+    curl \
     && rm -rf /var/lib/apt/lists/*
 
 # 复制依赖文件
@@ -22,7 +23,7 @@ RUN pip install gunicorn
 COPY . .
 
 # 创建必要的目录
-RUN mkdir -p logs uploads /var/log/SoloCloud /var/run/SoloCloud
+RUN mkdir -p logs uploads data
 
 # 设置权限
 RUN chmod +x start.sh

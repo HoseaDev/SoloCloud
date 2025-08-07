@@ -16,8 +16,8 @@ max_requests_jitter = 50
 preload_app = True
 
 # 日志配置
-accesslog = "/var/log/SoloCloud/access.log"
-errorlog = "/var/log/SoloCloud/error.log"
+accesslog = "/app/logs/access.log"
+errorlog = "/app/logs/error.log"
 loglevel = "info"
 access_log_format = '%(h)s %(l)s %(u)s %(t)s "%(r)s" %(s)s %(b)s "%(f)s" "%(a)s" %(D)s'
 
@@ -34,7 +34,7 @@ proc_name = "SoloCloud"
 # group = "SoloCloud"
 
 # PID文件
-pidfile = "/var/run/SoloCloud/SoloCloud.pid"
+pidfile = "/app/logs/solocloud.pid"
 
 # 临时目录
 tmp_upload_dir = None
