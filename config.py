@@ -1,15 +1,25 @@
 import os
 from datetime import timedelta
 
+def is_docker():
+    """简单检测是否在Docker中运行"""
+    return os.path.exists('/.dockerenv')
+
 class Config:
-    """基础配置"""
+    """基础配置 - 自动检测环境，优先使用环境变量"""
     SECRET_KEY = os.environ.get('SECRET_KEY') or 'dev-secret-key-change-in-production'
-    SQLALCHEMY_DATABASE_URI = os.environ.get('DATABASE_URL') or 'sqlite:///SoloCloud.db'
+    
+    # 数据库配置 - 环境变量优先，否则自动检测
+    SQLALCHEMY_DATABASE_URI = os.environ.get('DATABASE_URL') or (
+        'sqlite:////app/data/SoloCloud.db' if is_docker() else f'sqlite:///{os.path.abspath("data/SoloCloud.db")}'
+    )
     SQLALCHEMY_TRACK_MODIFICATIONS = False
     MAX_CONTENT_LENGTH = 1024 * 1024 * 1024  # 1GB max file size
     
-    # 上传配置
-    UPLOAD_FOLDER = os.environ.get('UPLOAD_FOLDER') or 'uploads'
+    # 上传配置 - 环境变量优先，否则自动检测
+    UPLOAD_FOLDER = os.environ.get('UPLOAD_FOLDER') or (
+        '/app/uploads' if is_docker() else 'uploads'
+    )
     
     # 存储配置
     STORAGE_PROVIDER = os.environ.get('STORAGE_PROVIDER') or 'local'
@@ -20,9 +30,11 @@ class Config:
     SESSION_COOKIE_HTTPONLY = True
     SESSION_COOKIE_SAMESITE = 'Lax'
     
-    # 日志配置
+    # 日志配置 - 环境变量优先，否则自动检测
     LOG_LEVEL = os.environ.get('LOG_LEVEL') or 'INFO'
-    LOG_FILE = os.environ.get('LOG_FILE') or 'logs/SoloCloud.log'
+    LOG_FILE = os.environ.get('LOG_FILE') or (
+        '/app/logs/SoloCloud.log' if is_docker() else 'logs/SoloCloud.log'
+    )
     LOG_MAX_BYTES = 10 * 1024 * 1024  # 10MB
     LOG_BACKUP_COUNT = 5
 
@@ -33,7 +45,7 @@ class DevelopmentConfig(Config):
     LOG_LEVEL = 'DEBUG'
 
 class ProductionConfig(Config):
-    """生产环境配置"""
+    """生产环境配置 - 继承基础配置的自动适应能力"""
     DEBUG = False
     TESTING = False
     
@@ -42,12 +54,8 @@ class ProductionConfig(Config):
     SESSION_COOKIE_HTTPONLY = True
     SESSION_COOKIE_SAMESITE = 'Strict'
     
-    # 生产环境数据库
-    SQLALCHEMY_DATABASE_URI = os.environ.get('DATABASE_URL') or 'sqlite:///solocloud_prod.db'
-    
-    # 生产环境日志
-    LOG_LEVEL = 'WARNING'
-    LOG_FILE = '/app/logs/SoloCloud.log'
+    # 生产环境日志级别（路径继承自基础配置）
+    LOG_LEVEL = os.environ.get('LOG_LEVEL') or 'WARNING'
 
 class TestingConfig(Config):
     """测试环境配置"""

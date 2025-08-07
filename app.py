@@ -198,13 +198,13 @@ login_manager.login_message = '请先登录访问此页面'
 # 创建应用实例
 app = create_app()
 
-# 本地存储配置
-UPLOAD_FOLDER = os.environ.get('UPLOAD_FOLDER', '/app/uploads')
+# 本地存储配置 - 使用Flask配置中的上传文件夹
+UPLOAD_FOLDER = app.config['UPLOAD_FOLDER']
 # 移除文件格式限制，允许上传任何类型的文件
 # ALLOWED_EXTENSIONS = {'txt', 'pdf', 'png', 'jpg', 'jpeg', 'gif', 'mp4', 'avi', 'mov', 'wmv', 'flv', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx'}
 
-# 存储配置
-STORAGE_PROVIDER = os.getenv('STORAGE_PROVIDER', 'local')
+# 存储配置 - 使用Flask配置中的存储提供商
+STORAGE_PROVIDER = app.config['STORAGE_PROVIDER']
 
 # 多云存储配置
 CLOUD_STORAGE_CONFIGS = {
@@ -1430,37 +1430,7 @@ def delete_chat_message(message_id):
 
 if __name__ == '__main__':
     with app.app_context():
-        # 检查数据库是否存在，如果不存在或表结构不匹配才重新创建
-        try:
-            from sqlalchemy import inspect
-            inspector = inspect(db.engine)
-            tables = inspector.get_table_names()
-            
-            # 检查是否有必要的表
-            required_tables = ['user', 'media_file', 'note', 'share_link']
-            tables_exist = all(table in tables for table in required_tables)
-            
-            if tables_exist:
-                # 检查media_file表结构
-                media_file_columns = [col['name'] for col in inspector.get_columns('media_file')]
-                has_user_id = 'user_id' in media_file_columns
-                
-                if has_user_id:
-                    print("✅ 数据库结构正常，保持现有数据")
-                else:
-                    print("⚠️  表结构不匹配，重新创建数据库")
-                    db.drop_all()
-                    db.create_all()
-            else:
-                print("🛠️  初始化数据库表")
-                db.create_all()
-                
-        except Exception as e:
-            print(f"🛠️  数据库初始化错误，重新创建: {e}")
-            db.drop_all()
-            db.create_all()
-        
-        # 确保单用户系统
-        ensure_single_user_system()
+        # 使用统一的数据库初始化函数
+        init_database()
     
     app.run(debug=True, host='0.0.0.0', port=8080)

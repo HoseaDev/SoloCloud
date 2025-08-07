@@ -8,9 +8,11 @@ services:
     environment:
       - FLASK_ENV=production
       - SECRET_KEY=${SECRET_KEY:-your-secret-key-here}
-      - DATABASE_URL=sqlite:////app/data/SoloCloud.db
-      - UPLOAD_FOLDER=/app/uploads
-      - LOG_FILE=/app/logs/SoloCloud.log
+      # 系统会自动检测到Docker环境并使用相应路径
+      # 如需自定义路径，可以添加以下环境变量:
+      # - DATABASE_URL=sqlite:////app/data/SoloCloud.db
+      # - UPLOAD_FOLDER=/app/uploads
+      # - LOG_FILE=/app/logs/SoloCloud.log
     volumes:
       - ./data:/app/data
     restart: unless-stopped
