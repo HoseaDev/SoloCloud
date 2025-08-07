@@ -10,6 +10,7 @@ services:
       - SECRET_KEY=${SECRET_KEY:-your-secret-key-here}
       - DATABASE_URL=sqlite:///data/SoloCloud.db
       - UPLOAD_FOLDER=/app/uploads
+      - LOG_FILE=/app/logs/SoloCloud.log
     volumes:
       - ./data:/app/data
       - ./uploads:/app/uploads
