@@ -80,6 +80,40 @@ def get_remaining_attempts(ip):
         return 5
     return max(0, 5 - login_attempts[ip]['count'])
 
+def init_database():
+    """初始化数据库表结构"""
+    try:
+        from sqlalchemy import inspect
+        inspector = inspect(db.engine)
+        tables = inspector.get_table_names()
+        
+        # 检查是否有必要的表
+        required_tables = ['user', 'media_file', 'note', 'share_link']
+        tables_exist = all(table in tables for table in required_tables)
+        
+        if tables_exist:
+            # 检查media_file表结构
+            media_file_columns = [col['name'] for col in inspector.get_columns('media_file')]
+            has_user_id = 'user_id' in media_file_columns
+            
+            if has_user_id:
+                print("✅ 数据库结构正常，保持现有数据")
+            else:
+                print("⚠️  表结构不匹配，重新创建数据库")
+                db.drop_all()
+                db.create_all()
+        else:
+            print("🛠️  初始化数据库表")
+            db.create_all()
+            
+    except Exception as e:
+        print(f"🛠️  数据库初始化错误，重新创建: {e}")
+        db.drop_all()
+        db.create_all()
+    
+    # 确保单用户系统
+    ensure_single_user_system()
+
 def ensure_single_user_system():
     """确保系统为单用户模式，如果有多个用户则只保留第一个"""
     users = User.query.all()
@@ -133,6 +167,15 @@ def create_app(config_name=None):
     os.makedirs(os.path.join(upload_folder, 'thumbnails'), exist_ok=True)
     os.makedirs(os.path.join(upload_folder, 'chat'), exist_ok=True)
     os.makedirs(os.path.join(upload_folder, 'chat_thumbnails'), exist_ok=True)
+    
+    # 注册数据库初始化回调（延迟到模型定义后执行）
+    def initialize_database():
+        if not hasattr(app, '_database_initialized'):
+            init_database()
+            app._database_initialized = True
+    
+    # 在应用启动后初始化数据库
+    app.before_request(initialize_database)
     
     # 添加健康检查路由
     @app.route('/health')
