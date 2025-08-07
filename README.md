@@ -205,8 +205,8 @@ docker-compose up -d
 # 查看服务状态
 docker-compose ps
 
-# 查看日志
-docker-compose logs -f
+# 查看容器日志
+docker-compose logs -f solocloud
 ```
 
 ### 生产环境部署
