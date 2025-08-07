@@ -1,11 +1,26 @@
+# SoloCloud 核心依赖
 Flask==2.3.3
 Flask-SQLAlchemy==3.0.5
 Flask-CORS==4.0.0
-Pillow==10.0.0
-oss2==2.18.1
-python-dotenv==1.0.0
-Werkzeug==2.3.7
 Flask-Login==0.6.3
+Werkzeug==2.3.7
+python-dotenv==1.0.0
 PyJWT==2.8.0
 bcrypt==4.0.1
+
+# 文件处理
+Pillow==10.0.0
 opencv-python==4.8.1.78
+
+# 云存储支持
+# 阿里云OSS
+oss2==2.18.1
+
+# 腾讯云COS
+cos-python-sdk-v5==1.9.24
+
+# 七牛云
+qiniu==7.12.0
+
+# 坚果云WebDAV和其他HTTP请求
+requests==2.31.0

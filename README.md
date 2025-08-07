@@ -1,14 +1,15 @@
 # SoloCloud - 个人云存储系统
 
-一个功能完整的个人云存储系统，支持图片、视频、文档存储，在线预览，笔记管理，以及本地存储和阿里云OSS双重存储方案。
+一个功能完整的个人云存储系统，支持图片、视频、文档存储，在线预览，笔记管理，以及多云存储方案（本地存储、阿里云OSS、腾讯云COS、七牛云、坚果云等）。
 
 ## 功能特性
 
 ### 📁 文件管理
 - **多格式支持**: 图片(PNG, JPG, JPEG, GIF)、视频(MP4, AVI, MOV, WMV, FLV)、文档(PDF, DOC, DOCX, XLS, XLSX, PPT, PPTX, TXT)
 - **在线预览**: 图片和视频支持在线预览
-- **双重存储**: 支持本地存储和阿里云OSS存储
-- **缩略图生成**: 自动为图片生成缩略图
+- **多云存储**: 支持本地存储、阿里云OSS、腾讯云COS、七牛云、坚果云等多种存储方式
+- **存储切换**: 可在Web界面中配置和切换不同的存储提供商
+- **缩略图生成**: 自动为图片和视频生成缩略图
 - **文件管理**: 上传、下载、删除、查看文件信息
 
 ### 📝 笔记系统
@@ -27,8 +28,8 @@
 - **后端**: Python Flask + SQLAlchemy
 - **前端**: HTML5 + Bootstrap 5 + JavaScript
 - **数据库**: SQLite
-- **云存储**: 阿里云OSS
-- **图片处理**: Pillow
+- **云存储**: 阿里云OSS、腾讯云COS、七牛云、坚果云(WebDAV)
+- **图片处理**: Pillow + OpenCV
 
 ## 安装和运行
 
@@ -46,6 +47,48 @@ pip install -r requirements.txt
 
 ```bash
 cp .env.example .env
+```
+
+#### 存储配置选项
+
+**本地存储**（默认）:
+```bash
+STORAGE_PROVIDER=local
+```
+
+**阿里云OSS**:
+```bash
+STORAGE_PROVIDER=aliyun_oss
+ALIYUN_OSS_ACCESS_KEY_ID=your-access-key-id
+ALIYUN_OSS_ACCESS_KEY_SECRET=your-access-key-secret
+ALIYUN_OSS_ENDPOINT=https://oss-cn-hangzhou.aliyuncs.com
+ALIYUN_OSS_BUCKET_NAME=your-bucket-name
+```
+
+**腾讯云COS**:
+```bash
+STORAGE_PROVIDER=tencent_cos
+TENCENT_COS_SECRET_ID=your-secret-id
+TENCENT_COS_SECRET_KEY=your-secret-key
+TENCENT_COS_REGION=ap-beijing
+TENCENT_COS_BUCKET_NAME=your-bucket-name
+```
+
+**七牛云**:
+```bash
+STORAGE_PROVIDER=qiniu
+QINIU_ACCESS_KEY=your-access-key
+QINIU_SECRET_KEY=your-secret-key
+QINIU_BUCKET_NAME=your-bucket-name
+QINIU_DOMAIN=your-domain.com
+```
+
+**坚果云**:
+```bash
+STORAGE_PROVIDER=jianguoyun
+JIANGUOYUN_WEBDAV_URL=https://dav.jianguoyun.com/dav
+JIANGUOYUN_USERNAME=your-username
+JIANGUOYUN_PASSWORD=your-app-password
 ```
 
 编辑 `.env` 文件：

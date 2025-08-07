@@ -10,11 +10,11 @@ from datetime import datetime, timedelta
 import cv2
 import numpy as np
 from PIL import Image
-import oss2
 from dotenv import load_dotenv
 import mimetypes
 import jwt
 import secrets
+from cloud_storage import storage_manager, STORAGE_PROVIDERS
 
 # 加载环境变量
 load_dotenv()
@@ -39,11 +39,35 @@ UPLOAD_FOLDER = 'uploads'
 # 移除文件格式限制，允许上传任何类型的文件
 # ALLOWED_EXTENSIONS = {'txt', 'pdf', 'png', 'jpg', 'jpeg', 'gif', 'mp4', 'avi', 'mov', 'wmv', 'flv', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx'}
 
-# 阿里云OSS配置
-OSS_ACCESS_KEY_ID = os.getenv('OSS_ACCESS_KEY_ID')
-OSS_ACCESS_KEY_SECRET = os.getenv('OSS_ACCESS_KEY_SECRET')
-OSS_ENDPOINT = os.getenv('OSS_ENDPOINT')
-OSS_BUCKET_NAME = os.getenv('OSS_BUCKET_NAME')
+# 存储配置
+STORAGE_PROVIDER = os.getenv('STORAGE_PROVIDER', 'local')
+
+# 多云存储配置
+CLOUD_STORAGE_CONFIGS = {
+    'aliyun_oss': {
+        'access_key_id': os.getenv('ALIYUN_OSS_ACCESS_KEY_ID'),
+        'access_key_secret': os.getenv('ALIYUN_OSS_ACCESS_KEY_SECRET'),
+        'endpoint': os.getenv('ALIYUN_OSS_ENDPOINT'),
+        'bucket_name': os.getenv('ALIYUN_OSS_BUCKET_NAME')
+    },
+    'tencent_cos': {
+        'secret_id': os.getenv('TENCENT_COS_SECRET_ID'),
+        'secret_key': os.getenv('TENCENT_COS_SECRET_KEY'),
+        'region': os.getenv('TENCENT_COS_REGION'),
+        'bucket_name': os.getenv('TENCENT_COS_BUCKET_NAME')
+    },
+    'qiniu': {
+        'access_key': os.getenv('QINIU_ACCESS_KEY'),
+        'secret_key': os.getenv('QINIU_SECRET_KEY'),
+        'bucket_name': os.getenv('QINIU_BUCKET_NAME'),
+        'domain': os.getenv('QINIU_DOMAIN')
+    },
+    'jianguoyun': {
+        'webdav_url': os.getenv('JIANGUOYUN_WEBDAV_URL'),
+        'username': os.getenv('JIANGUOYUN_USERNAME'),
+        'password': os.getenv('JIANGUOYUN_PASSWORD')
+    }
+}
 
 # 初始化数据库
 db = SQLAlchemy(app)
@@ -77,7 +101,7 @@ class MediaFile(db.Model):
     file_type = db.Column(db.String(50), nullable=False)  # image, video, document
     mime_type = db.Column(db.String(100), nullable=False)
     file_size = db.Column(db.Integer, nullable=False)
-    storage_type = db.Column(db.String(20), nullable=False)  # local, oss
+    storage_type = db.Column(db.String(20), nullable=False)  # local, aliyun_oss, tencent_cos, qiniu, jianguoyun
     file_path = db.Column(db.String(500), nullable=False)
     thumbnail_path = db.Column(db.String(500))
     upload_time = db.Column(db.DateTime, default=datetime.utcnow)
@@ -205,88 +229,376 @@ def create_video_thumbnail(video_path, thumbnail_path, size=(200, 200)):
         print(f"创建视频缩略图失败: {e}")
         return False
 
-def upload_to_oss(file_path, object_name):
-    """上传文件到阿里云OSS"""
+def update_env_file(updates):
+    """更新.env文件"""
+    env_file_path = '.env'
+    
+    # 读取现有的.env文件
+    env_vars = {}
+    if os.path.exists(env_file_path):
+        with open(env_file_path, 'r', encoding='utf-8') as f:
+            for line in f:
+                line = line.strip()
+                if line and not line.startswith('#') and '=' in line:
+                    key, value = line.split('=', 1)
+                    env_vars[key.strip()] = value.strip()
+    
+    # 更新变量
+    env_vars.update(updates)
+    
+    # 写回文件
+    with open(env_file_path, 'w', encoding='utf-8') as f:
+        for key, value in env_vars.items():
+            f.write(f"{key}={value}\n")
+
+def get_current_storage_configs():
+    """获取当前存储配置"""
+    return {
+        'aliyun_oss': {
+            'access_key_id': os.getenv('ALIYUN_OSS_ACCESS_KEY_ID', ''),
+            'access_key_secret': os.getenv('ALIYUN_OSS_ACCESS_KEY_SECRET', ''),
+            'endpoint': os.getenv('ALIYUN_OSS_ENDPOINT', ''),
+            'bucket_name': os.getenv('ALIYUN_OSS_BUCKET_NAME', '')
+        },
+        'tencent_cos': {
+            'secret_id': os.getenv('TENCENT_COS_SECRET_ID', ''),
+            'secret_key': os.getenv('TENCENT_COS_SECRET_KEY', ''),
+            'region': os.getenv('TENCENT_COS_REGION', ''),
+            'bucket_name': os.getenv('TENCENT_COS_BUCKET_NAME', '')
+        },
+        'qiniu': {
+            'access_key': os.getenv('QINIU_ACCESS_KEY', ''),
+            'secret_key': os.getenv('QINIU_SECRET_KEY', ''),
+            'bucket_name': os.getenv('QINIU_BUCKET_NAME', ''),
+            'domain': os.getenv('QINIU_DOMAIN', '')
+        },
+        'jianguoyun': {
+            'webdav_url': os.getenv('JIANGUOYUN_WEBDAV_URL', ''),
+            'username': os.getenv('JIANGUOYUN_USERNAME', ''),
+            'password': os.getenv('JIANGUOYUN_PASSWORD', '')
+        }
+    }
+
+def reload_storage_config():
+    """重新加载存储配置，使设置立即生效"""
+    global STORAGE_PROVIDER, CLOUD_STORAGE_CONFIGS
+    
+    # 重新加载环境变量
+    from dotenv import load_dotenv
+    load_dotenv(override=True)  # override=True 强制重新加载
+    
+    # 更新全局配置变量
+    STORAGE_PROVIDER = os.getenv('STORAGE_PROVIDER', 'local')
+    
+    # 更新云存储配置
+    CLOUD_STORAGE_CONFIGS.update({
+        'aliyun_oss': {
+            'access_key_id': os.getenv('ALIYUN_OSS_ACCESS_KEY_ID'),
+            'access_key_secret': os.getenv('ALIYUN_OSS_ACCESS_KEY_SECRET'),
+            'endpoint': os.getenv('ALIYUN_OSS_ENDPOINT'),
+            'bucket_name': os.getenv('ALIYUN_OSS_BUCKET_NAME')
+        },
+        'tencent_cos': {
+            'secret_id': os.getenv('TENCENT_COS_SECRET_ID'),
+            'secret_key': os.getenv('TENCENT_COS_SECRET_KEY'),
+            'region': os.getenv('TENCENT_COS_REGION'),
+            'bucket_name': os.getenv('TENCENT_COS_BUCKET_NAME')
+        },
+        'qiniu': {
+            'access_key': os.getenv('QINIU_ACCESS_KEY'),
+            'secret_key': os.getenv('QINIU_SECRET_KEY'),
+            'bucket_name': os.getenv('QINIU_BUCKET_NAME'),
+            'domain': os.getenv('QINIU_DOMAIN')
+        },
+        'jianguoyun': {
+            'webdav_url': os.getenv('JIANGUOYUN_WEBDAV_URL'),
+            'username': os.getenv('JIANGUOYUN_USERNAME'),
+            'password': os.getenv('JIANGUOYUN_PASSWORD')
+        }
+    })
+    
+    print(f"存储配置已热重载: STORAGE_PROVIDER = {STORAGE_PROVIDER}")
+
+def get_configured_providers():
+    """获取已配置的存储提供商列表"""
+    configured = ['local']  # 本地存储始终可用
+    
+    configs = get_current_storage_configs()
+    for provider, config in configs.items():
+        if provider == 'aliyun_oss':
+            if all([config['access_key_id'], config['access_key_secret'], 
+                   config['endpoint'], config['bucket_name']]):
+                configured.append(provider)
+        elif provider == 'tencent_cos':
+            if all([config['secret_id'], config['secret_key'], 
+                   config['region'], config['bucket_name']]):
+                configured.append(provider)
+        elif provider == 'qiniu':
+            if all([config['access_key'], config['secret_key'], 
+                   config['bucket_name'], config['domain']]):
+                configured.append(provider)
+        elif provider == 'jianguoyun':
+            if all([config['webdav_url'], config['username'], config['password']]):
+                configured.append(provider)
+    
+    return configured
+
+def upload_to_cloud_storage(file_path, object_name):
+    """上传文件到云存储"""
     try:
-        if not all([OSS_ACCESS_KEY_ID, OSS_ACCESS_KEY_SECRET, OSS_ENDPOINT, OSS_BUCKET_NAME]):
-            return False, "OSS配置不完整"
+        # 获取当前配置的存储提供商
+        provider = STORAGE_PROVIDER
         
-        auth = oss2.Auth(OSS_ACCESS_KEY_ID, OSS_ACCESS_KEY_SECRET)
-        bucket = oss2.Bucket(auth, OSS_ENDPOINT, OSS_BUCKET_NAME)
+        # 本地存储直接返回成功
+        if provider == 'local':
+            return True, "本地存储成功"
         
-        result = bucket.put_object_from_file(object_name, file_path)
-        return result.status == 200, result.request_id
+        # 获取存储客户端
+        config = CLOUD_STORAGE_CONFIGS.get(provider, {})
+        storage_client = storage_manager.get_storage_client(provider, config)
+        
+        if not storage_client:
+            return False, f"不支持的存储提供商: {provider}"
+        
+        if not storage_client.is_configured():
+            return False, f"{STORAGE_PROVIDERS.get(provider, provider)}配置不完整"
+        
+        # 上传文件
+        return storage_client.upload_file(file_path, object_name)
+        
     except Exception as e:
         return False, str(e)
 
+
+
 # 路由
 @app.route('/')
-@login_required
 def index():
-    return render_template('index.html')
+    # 检查是否是首次访问（没有用户）
+    if User.query.count() == 0:
+        return redirect(url_for('first_time_setup'))
+    
+    if current_user.is_authenticated:
+        return render_template('index.html')
+    return redirect(url_for('login'))
+
+@app.route('/first-time-setup', methods=['GET', 'POST'])
+def first_time_setup():
+    # 如果已经有用户，重定向到登录页
+    if User.query.count() > 0:
+        return redirect(url_for('login'))
+    
+    if request.method == 'POST':
+        username = request.form.get('username', '').strip()
+        password = request.form.get('password', '')
+        confirm_password = request.form.get('confirm_password', '')
+        
+        # 验证输入
+        if not username or len(username) < 3:
+            return render_template('first_time_setup.html', error='用户名至少需要3个字符')
+        
+        if not password or len(password) < 6:
+            return render_template('first_time_setup.html', error='密码至少需要6个字符')
+        
+        if password != confirm_password:
+            return render_template('first_time_setup.html', error='密码不一致')
+        
+        # 创建用户
+        user = User(
+            username=username, 
+            email=f'{username}@solocloud.local'  # 自动生成邮箱
+        )
+        user.set_password(password)
+        db.session.add(user)
+        db.session.commit()
+        
+        # 自动登录
+        login_user(user)
+        return redirect(url_for('index'))
+    
+    return render_template('first_time_setup.html')
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
+    # 如果没有用户，重定向到首次设置
+    if User.query.count() == 0:
+        return redirect(url_for('first_time_setup'))
+    
     if request.method == 'POST':
-        data = request.get_json() if request.is_json else request.form
-        username = data.get('username')
-        password = data.get('password')
+        username = request.form.get('username', '').strip()
+        password = request.form.get('password', '')
         
         if not username or not password:
-            if request.is_json:
-                return jsonify({'error': '用户名和密码不能为空'}), 400
-            return render_template('login.html', error='用户名和密码不能为空')
+            return render_template('login.html', error='请输入用户名和密码')
         
         user = User.query.filter_by(username=username).first()
         
         if user and user.check_password(password):
             login_user(user)
-            if request.is_json:
-                return jsonify({'message': '登录成功', 'redirect': url_for('index')})
-            return redirect(url_for('index'))
+            next_page = request.args.get('next')
+            return redirect(next_page) if next_page else redirect(url_for('index'))
         else:
-            if request.is_json:
-                return jsonify({'error': '用户名或密码错误'}), 401
             return render_template('login.html', error='用户名或密码错误')
     
     return render_template('login.html')
 
-@app.route('/register', methods=['GET', 'POST'])
-def register():
+@app.route('/change-password', methods=['GET', 'POST'])
+@login_required
+def change_password():
     if request.method == 'POST':
-        data = request.get_json() if request.is_json else request.form
-        username = data.get('username')
-        email = data.get('email')
-        password = data.get('password')
+        current_password = request.form['current_password']
+        new_password = request.form['new_password']
+        confirm_password = request.form['confirm_password']
         
-        if not all([username, email, password]):
-            if request.is_json:
-                return jsonify({'error': '所有字段都是必填的'}), 400
-            return render_template('register.html', error='所有字段都是必填的')
+        if not check_password_hash(current_user.password_hash, current_password):
+            return render_template('change_password.html', error='当前密码错误')
         
-        # 检查用户是否已存在
-        if User.query.filter_by(username=username).first():
-            if request.is_json:
-                return jsonify({'error': '用户名已存在'}), 400
-            return render_template('register.html', error='用户名已存在')
+        if new_password != confirm_password:
+            return render_template('change_password.html', error='新密码和确认密码不匹配')
         
-        if User.query.filter_by(email=email).first():
-            if request.is_json:
-                return jsonify({'error': '邮箱已被注册'}), 400
-            return render_template('register.html', error='邮箱已被注册')
+        if len(new_password) < 6:
+            return render_template('change_password.html', error='密码长度至少6位')
         
-        # 创建新用户
-        user = User(username=username, email=email)
-        user.set_password(password)
-        db.session.add(user)
+        current_user.password_hash = generate_password_hash(new_password)
         db.session.commit()
         
-        login_user(user)
-        if request.is_json:
-            return jsonify({'message': '注册成功', 'redirect': url_for('index')})
-        return redirect(url_for('index'))
+        return render_template('change_password.html', message='密码修改成功')
     
-    return render_template('register.html')
+    return render_template('change_password.html')
+
+@app.route('/storage-settings', methods=['GET', 'POST'])
+@login_required
+def storage_settings():
+    """存储设置页面"""
+    if request.method == 'POST':
+        try:
+            # 获取表单数据
+            storage_provider = request.form.get('storage_provider', 'local')
+            
+            # 更新环境变量文件
+            env_updates = {'STORAGE_PROVIDER': storage_provider}
+            
+            # 根据选择的提供商更新对应配置
+            if storage_provider == 'aliyun_oss':
+                env_updates.update({
+                    'ALIYUN_OSS_ACCESS_KEY_ID': request.form.get('aliyun_oss_access_key_id', ''),
+                    'ALIYUN_OSS_ACCESS_KEY_SECRET': request.form.get('aliyun_oss_access_key_secret', ''),
+                    'ALIYUN_OSS_ENDPOINT': request.form.get('aliyun_oss_endpoint', ''),
+                    'ALIYUN_OSS_BUCKET_NAME': request.form.get('aliyun_oss_bucket_name', '')
+                })
+            elif storage_provider == 'tencent_cos':
+                env_updates.update({
+                    'TENCENT_COS_SECRET_ID': request.form.get('tencent_cos_secret_id', ''),
+                    'TENCENT_COS_SECRET_KEY': request.form.get('tencent_cos_secret_key', ''),
+                    'TENCENT_COS_REGION': request.form.get('tencent_cos_region', ''),
+                    'TENCENT_COS_BUCKET_NAME': request.form.get('tencent_cos_bucket_name', '')
+                })
+            elif storage_provider == 'qiniu':
+                env_updates.update({
+                    'QINIU_ACCESS_KEY': request.form.get('qiniu_access_key', ''),
+                    'QINIU_SECRET_KEY': request.form.get('qiniu_secret_key', ''),
+                    'QINIU_BUCKET_NAME': request.form.get('qiniu_bucket_name', ''),
+                    'QINIU_DOMAIN': request.form.get('qiniu_domain', '')
+                })
+            elif storage_provider == 'jianguoyun':
+                env_updates.update({
+                    'JIANGUOYUN_WEBDAV_URL': request.form.get('jianguoyun_webdav_url', ''),
+                    'JIANGUOYUN_USERNAME': request.form.get('jianguoyun_username', ''),
+                    'JIANGUOYUN_PASSWORD': request.form.get('jianguoyun_password', '')
+                })
+            
+            # 更新.env文件
+            update_env_file(env_updates)
+            
+            # 热重载环境变量，立即生效
+            reload_storage_config()
+            
+            return render_template('storage_settings.html', 
+                                 message='存储设置已保存并立即生效！',
+                                 providers=STORAGE_PROVIDERS,
+                                 current_provider=storage_provider,
+                                 configs=get_current_storage_configs(),
+                                 configured_providers=get_configured_providers())
+            
+        except Exception as e:
+            return render_template('storage_settings.html', 
+                                 error=f'保存设置失败: {str(e)}',
+                                 providers=STORAGE_PROVIDERS,
+                                 current_provider=STORAGE_PROVIDER,
+                                 configs=get_current_storage_configs(),
+                                 configured_providers=get_configured_providers())
+    
+    # GET请求，显示当前配置
+    return render_template('storage_settings.html',
+                         providers=STORAGE_PROVIDERS,
+                         current_provider=STORAGE_PROVIDER,
+                         configs=get_current_storage_configs(),
+                         configured_providers=get_configured_providers())
+
+@app.route('/api/test-storage-connection', methods=['POST'])
+@login_required
+def test_storage_connection():
+    """测试存储连接"""
+    try:
+        storage_provider = request.form.get('storage_provider', 'local')
+        
+        if storage_provider == 'local':
+            return jsonify({'success': True, 'message': '本地存储连接正常'})
+        
+        # 构建测试配置
+        test_config = {}
+        if storage_provider == 'aliyun_oss':
+            test_config = {
+                'access_key_id': request.form.get('aliyun_oss_access_key_id'),
+                'access_key_secret': request.form.get('aliyun_oss_access_key_secret'),
+                'endpoint': request.form.get('aliyun_oss_endpoint'),
+                'bucket_name': request.form.get('aliyun_oss_bucket_name')
+            }
+        elif storage_provider == 'tencent_cos':
+            test_config = {
+                'secret_id': request.form.get('tencent_cos_secret_id'),
+                'secret_key': request.form.get('tencent_cos_secret_key'),
+                'region': request.form.get('tencent_cos_region'),
+                'bucket_name': request.form.get('tencent_cos_bucket_name')
+            }
+        elif storage_provider == 'qiniu':
+            test_config = {
+                'access_key': request.form.get('qiniu_access_key'),
+                'secret_key': request.form.get('qiniu_secret_key'),
+                'bucket_name': request.form.get('qiniu_bucket_name'),
+                'domain': request.form.get('qiniu_domain')
+            }
+        elif storage_provider == 'jianguoyun':
+            test_config = {
+                'webdav_url': request.form.get('jianguoyun_webdav_url'),
+                'username': request.form.get('jianguoyun_username'),
+                'password': request.form.get('jianguoyun_password')
+            }
+        
+        # 添加调试信息
+        print(f"Debug: storage_provider = {storage_provider}")
+        print(f"Debug: test_config = {test_config}")
+        print(f"Debug: form data keys = {list(request.form.keys())}")
+        
+        # 检查配置是否为空（仅对非本地存储）
+        if storage_provider != 'local':
+            empty_values = [k for k, v in test_config.items() if not v or str(v).strip() == '']
+            if empty_values:
+                return jsonify({
+                    'success': False, 
+                    'error': f'以下配置项为空: {", ".join(empty_values)}. 请检查表单中的输入字段是否已填写。'
+                })
+        
+        # 使用新的连接测试功能
+        success, message = storage_manager.test_storage_connection(storage_provider, test_config)
+        
+        return jsonify({
+            'success': success,
+            'message' if success else 'error': message
+        })
+        
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
 
 @app.route('/logout')
 @login_required
@@ -326,7 +638,7 @@ def upload_file():
     
     file = request.files['file']
     # 使用默认配置的存储方式（可以后续从配置文件读取）
-    storage_type = 'local'  # 默认使用本地存储
+    storage_type = STORAGE_PROVIDER  # 使用当前配置的存储提供商
     description = ''  # 移除文件描述功能
     
     if file.filename == '':
@@ -388,16 +700,17 @@ def upload_file():
         
         final_path = local_path
         
-        # 如果选择OSS存储，上传到OSS
-        if storage_type == 'oss':
-            oss_object_name = f"{subfolder}/{unique_filename}"
-            success, result = upload_to_oss(local_path, oss_object_name)
+        # 如果选择云存储，上传到云存储
+        if STORAGE_PROVIDER != 'local':
+            cloud_object_name = f"{subfolder}/{unique_filename}"
+            success, result = upload_to_cloud_storage(local_path, cloud_object_name)
             if success:
-                final_path = oss_object_name
-                # 可以选择删除本地文件以节省空间
-                # os.remove(local_path)
+                final_path = cloud_object_name
+                # 可以选择删除本地文件以节省空间（云存储时）
+                # os.remove(local_path)  # 暂时保留本地副本
+                pass
             else:
-                return jsonify({'error': f'OSS上传失败: {result}'}), 500
+                return jsonify({'error': f'云存储上传失败: {result}'}), 500
         
         # 保存到数据库
         media_file = MediaFile(
@@ -406,10 +719,9 @@ def upload_file():
             file_type=file_type,
             mime_type=file.mimetype or mimetypes.guess_type(original_filename)[0] or 'application/octet-stream',
             file_size=file_size,
-            storage_type=storage_type,
             file_path=final_path,
             thumbnail_path=thumbnail_path,
-            description=description,
+            storage_type=STORAGE_PROVIDER,
             user_id=current_user.id
         )
         
@@ -421,7 +733,7 @@ def upload_file():
             'file_id': media_file.id,
             'filename': original_filename,
             'file_type': file_type,
-            'storage_type': storage_type
+            'storage_type': STORAGE_PROVIDER
         })
     
     return jsonify({'error': '不支持的文件类型'}), 400
@@ -485,12 +797,24 @@ def list_files():
 def get_file(file_id):
     media_file = MediaFile.query.get_or_404(file_id)
     
-    if media_file.storage_type == 'local':
-        return send_file(media_file.file_path)
-    else:
-        # 对于OSS存储的文件，返回下载URL
-        # 这里需要根据实际情况实现OSS文件访问
-        return jsonify({'error': 'OSS文件访问功能待实现'}), 501
+    try:
+        storage = storage_manager.get_storage(media_file.storage_type)
+        if not storage:
+            return jsonify({'error': f'不支持的存储类型: {media_file.storage_type}'}), 500
+        
+        # 对于本地存储，直接返回文件
+        if media_file.storage_type == 'local':
+            return send_file(media_file.file_path)
+        
+        # 对于云存储，生成访问URL
+        url = storage.get_file_url(media_file.file_path)
+        if url:
+            return redirect(url)
+        else:
+            return jsonify({'error': '无法生成文件访问URL'}), 500
+            
+    except Exception as e:
+        return jsonify({'error': f'文件访问失败: {str(e)}'}), 500
 
 @app.route('/api/thumbnail/<int:file_id>')
 def get_thumbnail(file_id):
@@ -929,15 +1253,11 @@ if __name__ == '__main__':
             db.drop_all()
             db.create_all()
         
-        # 创建管理员用户（如果不存在）
-        admin = User.query.filter_by(username='admin').first()
-        if not admin:
-            admin = User(username='admin', email='admin@solocloud.local')
-            admin.set_password('admin123')
-            db.session.add(admin)
-            db.session.commit()
-            print("👤 管理员用户已创建")
+        # 检查用户数量
+        user_count = User.query.count()
+        if user_count == 0:
+            print("🔧 首次启动，等待用户设置账号密码")
         else:
-            print("👤 管理员用户已存在")
+            print(f"👤 系统已有 {user_count} 个用户")
     
     app.run(debug=True, host='0.0.0.0', port=8080)

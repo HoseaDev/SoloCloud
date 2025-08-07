@@ -64,7 +64,52 @@ function loadStorageConfig() {
 // DOM加载完成后初始化
 document.addEventListener('DOMContentLoaded', function() {
     initializeApp();
+    initializeMobileNavigation();
 });
+
+// 移动端导航功能
+function initializeMobileNavigation() {
+    const sidebarToggle = document.getElementById('sidebarToggle');
+    const sidebar = document.getElementById('sidebar');
+    const sidebarOverlay = document.getElementById('sidebarOverlay');
+    
+    if (!sidebarToggle || !sidebar || !sidebarOverlay) return;
+    
+    // 切换侧边栏显示
+    function toggleSidebar() {
+        sidebar.classList.toggle('show');
+        sidebarOverlay.classList.toggle('show');
+        document.body.style.overflow = sidebar.classList.contains('show') ? 'hidden' : '';
+    }
+    
+    // 隐藏侧边栏
+    function hideSidebar() {
+        sidebar.classList.remove('show');
+        sidebarOverlay.classList.remove('show');
+        document.body.style.overflow = '';
+    }
+    
+    // 绑定事件
+    sidebarToggle.addEventListener('click', toggleSidebar);
+    sidebarOverlay.addEventListener('click', hideSidebar);
+    
+    // 点击侧边栏内的导航链接时自动隐藏侧边栏（移动端）
+    const navLinks = sidebar.querySelectorAll('.nav-link');
+    navLinks.forEach(link => {
+        link.addEventListener('click', () => {
+            if (window.innerWidth < 768) {
+                setTimeout(hideSidebar, 100); // 稍微延迟以确保页面切换完成
+            }
+        });
+    });
+    
+    // 监听窗口大小变化
+    window.addEventListener('resize', () => {
+        if (window.innerWidth >= 768) {
+            hideSidebar(); // 在大屏幕上自动隐藏移动端侧边栏
+        }
+    });
+}
 
 function initializeApp() {
     initializeNavigation();
@@ -401,6 +446,9 @@ function loadFiles(page = 1) {
 
 function displayFiles(files) {
     const container = document.getElementById('filesContainer');
+    
+    // 设置全局文件列表，供预览功能使用
+    window.currentFiles = files;
     
     if (files.length === 0) {
         container.innerHTML = '<div class="text-center text-muted py-5">暂无文件</div>';

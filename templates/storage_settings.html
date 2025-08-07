@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>存储设置 - SoloCloud</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.7.2/font/bootstrap-icons.css" rel="stylesheet">
+    <style>
+        body {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px 0;
+        }
+        .settings-card {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-radius: 15px;
+            box-shadow: 0 15px 35px rgba(0, 0, 0, 0.1);
+        }
+        .provider-card {
+            border: 2px solid #e9ecef;
+            border-radius: 10px;
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+        .provider-card:hover {
+            border-color: #667eea;
+            transform: translateY(-2px);
+        }
+        .provider-card.active {
+            border-color: #667eea;
+            background: rgba(102, 126, 234, 0.1);
+        }
+        .config-section {
+            display: none;
+        }
+        .config-section.active {
+            display: block;
+        }
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border: none;
+        }
+        .btn-primary:hover {
+            background: linear-gradient(135deg, #5a67d8 0%, #6b46c1 100%);
+        }
+        .status-indicator {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            display: inline-block;
+            margin-right: 8px;
+        }
+        .status-configured {
+            background-color: #28a745;
+        }
+        .status-unconfigured {
+            background-color: #dc3545;
+        }
+        /* 测试结果区域样式 */
+        #testResult {
+            margin-top: 20px;
+        }
+        
+        #testResultContent {
+            word-wrap: break-word;
+            white-space: pre-wrap;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="row justify-content-center">
+            <div class="col-lg-10">
+                <div class="card settings-card">
+                    <div class="card-body p-5">
+                        <div class="d-flex justify-content-between align-items-center mb-4">
+                            <div>
+                                <h2><i class="bi bi-cloud-upload me-2"></i>存储设置</h2>
+                                <p class="text-muted">选择和配置您的文件存储方式</p>
+                            </div>
+                            <a href="{{ url_for('index') }}" class="btn btn-outline-secondary">
+                                <i class="bi bi-arrow-left"></i> 返回主页
+                            </a>
+                        </div>
+
+                        {% if message %}
+                        <div class="alert alert-success alert-dismissible fade show" role="alert">
+                            {{ message }}
+                            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                        </div>
+                        {% endif %}
+
+                        {% if error %}
+                        <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                            {{ error }}
+                            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                        </div>
+                        {% endif %}
+
+                        <form method="POST" id="storageSettingsForm">
+                            <!-- 存储提供商选择 -->
+                            <div class="mb-4">
+                                <h4 class="mb-3">选择存储提供商</h4>
+                                <div class="row">
+                                    {% for provider_key, provider_name in providers.items() %}
+                                    <div class="col-md-6 col-lg-4 mb-3">
+                                        <div class="provider-card p-3 h-100 {% if current_provider == provider_key %}active{% endif %}" 
+                                             data-provider="{{ provider_key }}">
+                                            <div class="d-flex align-items-center mb-2">
+                                                <input type="radio" name="storage_provider" value="{{ provider_key }}" 
+                                                       id="provider_{{ provider_key }}" class="form-check-input me-2"
+                                                       {% if current_provider == provider_key %}checked{% endif %}>
+                                                <label for="provider_{{ provider_key }}" class="form-check-label fw-bold">
+                                                    {{ provider_name }}
+                                                </label>
+                                            </div>
+                                            <div class="text-muted small">
+                                                <span class="status-indicator {% if provider_key in configured_providers %}status-configured{% else %}status-unconfigured{% endif %}"></span>
+                                                {% if provider_key in configured_providers %}已配置{% else %}未配置{% endif %}
+                                            </div>
+                                        </div>
+                                    </div>
+                                    {% endfor %}
+                                </div>
+                            </div>
+
+                            <!-- 配置区域 -->
+                            <div class="mb-4">
+                                <h4 class="mb-3">存储配置</h4>
+                                
+                                <!-- 本地存储配置 -->
+                                <div class="config-section {% if current_provider == 'local' %}active{% endif %}" id="config-local">
+                                    <div class="alert alert-info">
+                                        <i class="bi bi-info-circle me-2"></i>
+                                        本地存储无需额外配置，文件将保存在服务器本地磁盘上。
+                                    </div>
+                                </div>
+
+                                <!-- 阿里云OSS配置 -->
+                                <div class="config-section {% if current_provider == 'aliyun_oss' %}active{% endif %}" id="config-aliyun_oss">
+                                    <div class="row">
+                                        <div class="col-md-6 mb-3">
+                                            <label class="form-label">Access Key ID</label>
+                                            <input type="text" class="form-control" name="aliyun_oss_access_key_id" 
+                                                   value="{{ configs.aliyun_oss.access_key_id or '' }}" placeholder="请输入Access Key ID">
+                                        </div>
+                                        <div class="col-md-6 mb-3">
+                                            <label class="form-label">Access Key Secret</label>
+                                            <input type="password" class="form-control" name="aliyun_oss_access_key_secret" 
+                                                   value="{{ configs.aliyun_oss.access_key_secret or '' }}" placeholder="请输入Access Key Secret">
+                                        </div>
+                                        <div class="col-md-6 mb-3">
+                                            <label class="form-label">Endpoint</label>
+                                            <input type="text" class="form-control" name="aliyun_oss_endpoint" 
+                                                   value="{{ configs.aliyun_oss.endpoint or '' }}" placeholder="https://oss-cn-hangzhou.aliyuncs.com">
+                                        </div>
+                                        <div class="col-md-6 mb-3">
+                                            <label class="form-label">Bucket Name</label>
+                                            <input type="text" class="form-control" name="aliyun_oss_bucket_name" 
+                                                   value="{{ configs.aliyun_oss.bucket_name or '' }}" placeholder="请输入Bucket名称">
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- 腾讯云COS配置 -->
+                                <div class="config-section {% if current_provider == 'tencent_cos' %}active{% endif %}" id="config-tencent_cos">
+                                    <div class="row">
+                                        <div class="col-md-6 mb-3">
+                                            <label class="form-label">Secret ID</label>
+                                            <input type="text" class="form-control" name="tencent_cos_secret_id" 
+                                                   value="{{ configs.tencent_cos.secret_id or '' }}" placeholder="请输入Secret ID">
+                                        </div>
+                                        <div class="col-md-6 mb-3">
+                                            <label class="form-label">Secret Key</label>
+                                            <input type="password" class="form-control" name="tencent_cos_secret_key" 
+                                                   value="{{ configs.tencent_cos.secret_key or '' }}" placeholder="请输入Secret Key">
+                                        </div>
+                                        <div class="col-md-6 mb-3">
+                                            <label class="form-label">Region</label>
+                                            <select class="form-select" name="tencent_cos_region">
+                                                <option value="">请选择地域</option>
+                                                <option value="ap-beijing" {% if configs.tencent_cos.region == 'ap-beijing' %}selected{% endif %}>北京</option>
+                                                <option value="ap-shanghai" {% if configs.tencent_cos.region == 'ap-shanghai' %}selected{% endif %}>上海</option>
+                                                <option value="ap-guangzhou" {% if configs.tencent_cos.region == 'ap-guangzhou' %}selected{% endif %}>广州</option>
+                                                <option value="ap-chengdu" {% if configs.tencent_cos.region == 'ap-chengdu' %}selected{% endif %}>成都</option>
+                                            </select>
+                                        </div>
+                                        <div class="col-md-6 mb-3">
+                                            <label class="form-label">Bucket Name</label>
+                                            <input type="text" class="form-control" name="tencent_cos_bucket_name" 
+                                                   value="{{ configs.tencent_cos.bucket_name or '' }}" placeholder="请输入Bucket名称">
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- 七牛云配置 -->
+                                <div class="config-section {% if current_provider == 'qiniu' %}active{% endif %}" id="config-qiniu">
+                                    <div class="row">
+                                        <div class="col-md-6 mb-3">
+                                            <label class="form-label">Access Key</label>
+                                            <input type="text" class="form-control" name="qiniu_access_key" 
+                                                   value="{{ configs.qiniu.access_key or '' }}" placeholder="请输入Access Key">
+                                        </div>
+                                        <div class="col-md-6 mb-3">
+                                            <label class="form-label">Secret Key</label>
+                                            <input type="password" class="form-control" name="qiniu_secret_key" 
+                                                   value="{{ configs.qiniu.secret_key or '' }}" placeholder="请输入Secret Key">
+                                        </div>
+                                        <div class="col-md-6 mb-3">
+                                            <label class="form-label">Bucket Name</label>
+                                            <input type="text" class="form-control" name="qiniu_bucket_name" 
+                                                   value="{{ configs.qiniu.bucket_name or '' }}" placeholder="请输入Bucket名称">
+                                        </div>
+                                        <div class="col-md-6 mb-3">
+                                            <label class="form-label">访问域名</label>
+                                            <input type="text" class="form-control" name="qiniu_domain" 
+                                                   value="{{ configs.qiniu.domain or '' }}" placeholder="your-domain.com">
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- 坚果云配置 -->
+                                <div class="config-section {% if current_provider == 'jianguoyun' %}active{% endif %}" id="config-jianguoyun">
+                                    <div class="row">
+                                        <div class="col-md-12 mb-3">
+                                            <label class="form-label">WebDAV URL</label>
+                                            <input type="text" class="form-control" name="jianguoyun_webdav_url" 
+                                                   value="{{ configs.jianguoyun.webdav_url or 'https://dav.jianguoyun.com/dav' }}" 
+                                                   placeholder="https://dav.jianguoyun.com/dav">
+                                        </div>
+                                        <div class="col-md-6 mb-3">
+                                            <label class="form-label">用户名</label>
+                                            <input type="text" class="form-control" name="jianguoyun_username" 
+                                                   value="{{ configs.jianguoyun.username or '' }}" placeholder="请输入坚果云用户名">
+                                        </div>
+                                        <div class="col-md-6 mb-3">
+                                            <label class="form-label">应用密码</label>
+                                            <input type="password" class="form-control" name="jianguoyun_password" 
+                                                   value="{{ configs.jianguoyun.password or '' }}" placeholder="请输入应用密码">
+                                            <div class="form-text">请使用坚果云的应用密码，而非登录密码</div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- 测试结果显示区域 -->
+                            <div id="testResult" class="mb-3" style="display: none;">
+                                <div id="testResultContent" class="alert" role="alert"></div>
+                            </div>
+                            
+                            <div class="d-flex justify-content-between">
+                                <button type="button" class="btn btn-outline-secondary" id="testConnection">
+                                    <i class="bi bi-wifi"></i> 测试连接
+                                </button>
+                                <button type="submit" class="btn btn-primary">
+                                    <i class="bi bi-check-lg"></i> 保存设置
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const providerCards = document.querySelectorAll('.provider-card');
+            const configSections = document.querySelectorAll('.config-section');
+            const radioButtons = document.querySelectorAll('input[name="storage_provider"]');
+
+            // 处理提供商卡片点击
+            providerCards.forEach(card => {
+                card.addEventListener('click', function() {
+                    const provider = this.dataset.provider;
+                    const radio = document.getElementById(`provider_${provider}`);
+                    
+                    // 更新选中状态
+                    providerCards.forEach(c => c.classList.remove('active'));
+                    this.classList.add('active');
+                    radio.checked = true;
+                    
+                    // 显示对应配置
+                    configSections.forEach(section => section.classList.remove('active'));
+                    document.getElementById(`config-${provider}`).classList.add('active');
+                });
+            });
+
+            // 处理单选按钮变化
+            radioButtons.forEach(radio => {
+                radio.addEventListener('change', function() {
+                    if (this.checked) {
+                        const provider = this.value;
+                        
+                        // 更新卡片状态
+                        providerCards.forEach(card => {
+                            card.classList.toggle('active', card.dataset.provider === provider);
+                        });
+                        
+                        // 显示对应配置
+                        configSections.forEach(section => section.classList.remove('active'));
+                        document.getElementById(`config-${provider}`).classList.add('active');
+                    }
+                });
+            });
+
+            // 测试连接功能
+            document.getElementById('testConnection').addEventListener('click', function() {
+                const formData = new FormData(document.getElementById('storageSettingsForm'));
+                const button = this;
+                const originalText = button.innerHTML;
+                const testResult = document.getElementById('testResult');
+                const testResultContent = document.getElementById('testResultContent');
+                
+                // 隐藏之前的结果
+                testResult.style.display = 'none';
+                
+                button.innerHTML = '<i class="bi bi-hourglass-split"></i> 测试中...';
+                button.disabled = true;
+                
+                fetch('/api/test-storage-connection', {
+                    method: 'POST',
+                    body: formData
+                })
+                .then(response => response.json())
+                .then(data => {
+                    // 显示结果
+                    testResult.style.display = 'block';
+                    
+                    if (data.success) {
+                        testResultContent.className = 'alert alert-success';
+                        testResultContent.innerHTML = '<i class="bi bi-check-circle me-2"></i><strong>连接成功！</strong><br>' + (data.message || '存储服务连接正常');
+                    } else {
+                        testResultContent.className = 'alert alert-danger';
+                        testResultContent.innerHTML = '<i class="bi bi-exclamation-triangle me-2"></i><strong>连接失败</strong><br>' + (data.error || '未知错误');
+                    }
+                    
+                    // 自动滚动到结果区域
+                    testResult.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                })
+                .catch(error => {
+                    testResult.style.display = 'block';
+                    testResultContent.className = 'alert alert-danger';
+                    testResultContent.innerHTML = '<i class="bi bi-exclamation-triangle me-2"></i><strong>请求失败</strong><br>' + error.message;
+                    testResult.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                })
+                .finally(() => {
+                    button.innerHTML = originalText;
+                    button.disabled = false;
+                });
+            });
+        });
+    </script>
+</body>
+</html>
