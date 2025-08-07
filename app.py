@@ -124,6 +124,16 @@ def create_app(config_name=None):
     # 初始化错误处理
     init_error_handlers(app)
     
+    # 创建上传目录
+    upload_folder = app.config.get('UPLOAD_FOLDER', '/app/uploads')
+    os.makedirs(upload_folder, exist_ok=True)
+    os.makedirs(os.path.join(upload_folder, 'images'), exist_ok=True)
+    os.makedirs(os.path.join(upload_folder, 'videos'), exist_ok=True)
+    os.makedirs(os.path.join(upload_folder, 'files'), exist_ok=True)
+    os.makedirs(os.path.join(upload_folder, 'thumbnails'), exist_ok=True)
+    os.makedirs(os.path.join(upload_folder, 'chat'), exist_ok=True)
+    os.makedirs(os.path.join(upload_folder, 'chat_thumbnails'), exist_ok=True)
+    
     # 添加健康检查路由
     @app.route('/health')
     def health_check():
@@ -146,7 +156,7 @@ login_manager.login_message = '请先登录访问此页面'
 app = create_app()
 
 # 本地存储配置
-UPLOAD_FOLDER = 'uploads'
+UPLOAD_FOLDER = os.environ.get('UPLOAD_FOLDER', '/app/uploads')
 # 移除文件格式限制，允许上传任何类型的文件
 # ALLOWED_EXTENSIONS = {'txt', 'pdf', 'png', 'jpg', 'jpeg', 'gif', 'mp4', 'avi', 'mov', 'wmv', 'flv', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx'}
 
@@ -181,13 +191,6 @@ CLOUD_STORAGE_CONFIGS = {
 }
 
 # 数据库已在create_app函数中初始化
-
-# 确保上传目录存在
-os.makedirs(UPLOAD_FOLDER, exist_ok=True)
-os.makedirs(os.path.join(UPLOAD_FOLDER, 'images'), exist_ok=True)
-os.makedirs(os.path.join(UPLOAD_FOLDER, 'videos'), exist_ok=True)
-os.makedirs(os.path.join(UPLOAD_FOLDER, 'files'), exist_ok=True)
-os.makedirs(os.path.join(UPLOAD_FOLDER, 'thumbnails'), exist_ok=True)
 
 # 数据模型
 class User(UserMixin, db.Model):
