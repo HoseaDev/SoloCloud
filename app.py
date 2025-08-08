@@ -322,15 +322,203 @@ class ChatMessage(db.Model):
     
     user = db.relationship('User', backref=db.backref('chat_messages', lazy=True))
 
+class SystemConfig(db.Model):
+    """系统配置模型 - 存储系统级别的配置信息"""
+    id = db.Column(db.Integer, primary_key=True)
+    config_key = db.Column(db.String(100), unique=True, nullable=False)  # 配置键
+    config_value = db.Column(db.Text)  # 配置值
+    config_type = db.Column(db.String(20), default='string')  # 配置类型: string, json, boolean
+    description = db.Column(db.String(255))  # 配置描述
+    created_time = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_time = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    @staticmethod
+    def get_config(key, default_value=None):
+        """获取配置值"""
+        config = SystemConfig.query.filter_by(config_key=key).first()
+        if config:
+            if config.config_type == 'json':
+                import json
+                try:
+                    return json.loads(config.config_value)
+                except:
+                    return default_value
+            elif config.config_type == 'boolean':
+                return config.config_value.lower() in ['true', '1', 'yes']
+            else:
+                return config.config_value
+        return default_value
+    
+    @staticmethod
+    def set_config(key, value, config_type='string', description=None):
+        """设置配置值"""
+        config = SystemConfig.query.filter_by(config_key=key).first()
+        if config:
+            if config_type == 'json':
+                import json
+                config.config_value = json.dumps(value)
+            else:
+                config.config_value = str(value)
+            config.config_type = config_type
+            config.updated_time = datetime.utcnow()
+            if description:
+                config.description = description
+        else:
+            if config_type == 'json':
+                import json
+                value_str = json.dumps(value)
+            else:
+                value_str = str(value)
+            config = SystemConfig(
+                config_key=key,
+                config_value=value_str,
+                config_type=config_type,
+                description=description
+            )
+            db.session.add(config)
+        db.session.commit()
+        return config
+
 # Flask-Login用户加载器
 @login_manager.user_loader
 def load_user(user_id):
     return User.query.get(int(user_id))
 
+# 存储配置管理函数
+def get_current_storage_provider():
+    """获取当前存储提供商 - 优先使用数据库配置，否则使用环境变量默认值"""
+    try:
+        # 优先从数据库读取用户设置
+        db_provider = SystemConfig.get_config('storage_provider')
+        if db_provider:
+            return db_provider
+        
+        # 如果数据库没有配置，使用环境变量默认值并初始化数据库
+        env_provider = os.getenv('STORAGE_PROVIDER', 'local')
+        SystemConfig.set_config('storage_provider', env_provider, 'string', '当前使用的存储提供商')
+        return env_provider
+    except Exception as e:
+        # 如果数据库操作失败，回退到环境变量
+        print(f"获取存储提供商配置失败，使用环境变量默认值: {e}")
+        return os.getenv('STORAGE_PROVIDER', 'local')
+
+def set_current_storage_provider(provider):
+    """设置当前存储提供商到数据库"""
+    try:
+        SystemConfig.set_config('storage_provider', provider, 'string', '当前使用的存储提供商')
+        print(f"✅ 存储提供商已保存到数据库: {provider}")
+        return True
+    except Exception as e:
+        print(f"❌ 保存存储提供商配置失败: {e}")
+        return False
+
+def get_storage_config(provider_key, config_key, default_value=None):
+    """获取特定存储提供商的配置"""
+    try:
+        full_key = f'storage_{provider_key}_{config_key}'
+        return SystemConfig.get_config(full_key, default_value)
+    except Exception as e:
+        print(f"获取存储配置失败 {full_key}: {e}")
+        return default_value
+
+def set_storage_config(provider_key, config_key, value):
+    """设置特定存储提供商的配置"""
+    try:
+        full_key = f'storage_{provider_key}_{config_key}'
+        SystemConfig.set_config(full_key, value, 'string', f'{provider_key}存储的{config_key}配置')
+        return True
+    except Exception as e:
+        print(f"设置存储配置失败 {full_key}: {e}")
+        return False
+
+def get_current_storage_configs_from_db():
+    """从数据库获取当前存储配置"""
+    try:
+        configs = {}
+        # 获取各种存储提供商的配置
+        configs['aliyun_oss'] = {
+            'access_key_id': get_storage_config('aliyun_oss', 'access_key_id', ''),
+            'access_key_secret': get_storage_config('aliyun_oss', 'access_key_secret', ''),
+            'endpoint': get_storage_config('aliyun_oss', 'endpoint', ''),
+            'bucket_name': get_storage_config('aliyun_oss', 'bucket_name', '')
+        }
+        configs['tencent_cos'] = {
+            'secret_id': get_storage_config('tencent_cos', 'secret_id', ''),
+            'secret_key': get_storage_config('tencent_cos', 'secret_key', ''),
+            'region': get_storage_config('tencent_cos', 'region', ''),
+            'bucket_name': get_storage_config('tencent_cos', 'bucket_name', '')
+        }
+        configs['qiniu'] = {
+            'access_key': get_storage_config('qiniu', 'access_key', ''),
+            'secret_key': get_storage_config('qiniu', 'secret_key', ''),
+            'bucket_name': get_storage_config('qiniu', 'bucket_name', ''),
+            'domain': get_storage_config('qiniu', 'domain', '')
+        }
+        configs['jianguoyun'] = {
+            'webdav_url': get_storage_config('jianguoyun', 'webdav_url', ''),
+            'username': get_storage_config('jianguoyun', 'username', ''),
+            'password': get_storage_config('jianguoyun', 'password', '')
+        }
+        return configs
+    except Exception as e:
+        print(f"获取数据库存储配置失败: {e}")
+        # 回退到环境变量
+        return get_current_storage_configs()
+
+def get_configured_providers_from_db():
+    """从数据库获取已配置的存储提供商列表"""
+    try:
+        configured = set()
+        configs = get_current_storage_configs_from_db()
+        
+        # 检查各个提供商是否有必要的配置
+        if configs['aliyun_oss']['access_key_id'] and configs['aliyun_oss']['access_key_secret']:
+            configured.add('aliyun_oss')
+        if configs['tencent_cos']['secret_id'] and configs['tencent_cos']['secret_key']:
+            configured.add('tencent_cos')
+        if configs['qiniu']['access_key'] and configs['qiniu']['secret_key']:
+            configured.add('qiniu')
+        if configs['jianguoyun']['webdav_url'] and configs['jianguoyun']['username']:
+            configured.add('jianguoyun')
+        
+        # 本地存储始终被认为已配置
+        configured.add('local')
+        
+        return list(configured)
+    except Exception as e:
+        print(f"获取数据库已配置提供商失败: {e}")
+        # 回退到环境变量
+        return get_configured_providers()
+
 # 工具函数
 def allowed_file(filename):
-    # 允许上传任何类型的文件，只要有文件名即可
-    return filename and filename.strip() != ''
+    """检查文件类型是否被允许上传"""
+    if not filename or filename.strip() == '':
+        return False
+    
+    # 定义允许的文件扩展名
+    ALLOWED_EXTENSIONS = {
+        # 图片文件
+        'jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp', 'svg', 'ico', 'tiff', 'tif',
+        # 视频文件
+        'mp4', 'avi', 'mov', 'wmv', 'flv', 'webm', 'mkv', 'm4v', '3gp', 'mpg', 'mpeg',
+        # 音频文件
+        'mp3', 'wav', 'flac', 'aac', 'ogg', 'wma', 'm4a',
+        # 文档文件
+        'pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'txt', 'rtf', 'odt', 'ods', 'odp',
+        # 压缩文件
+        'zip', 'rar', '7z', 'tar', 'gz', 'bz2', 'xz',
+        # 代码文件
+        'html', 'htm', 'css', 'js', 'json', 'xml', 'py', 'java', 'cpp', 'c', 'h', 'php', 'rb', 'go', 'rs', 'swift',
+        'sql', 'sh', 'bat', 'ps1', 'yml', 'yaml', 'toml', 'ini', 'cfg', 'conf', 'md', 'rst',
+        # 其他常用文件
+        'csv', 'tsv', 'log', 'backup', 'bak'
+    }
+    
+    # 获取文件扩展名
+    file_ext = filename.rsplit('.', 1)[1].lower() if '.' in filename else ''
+    
+    return file_ext in ALLOWED_EXTENSIONS
 
 def get_file_type(filename):
     # 处理没有扩展名的文件
@@ -522,7 +710,7 @@ def upload_to_cloud_storage(file_path, object_name):
     """上传文件到云存储"""
     try:
         # 获取当前配置的存储提供商
-        provider = STORAGE_PROVIDER
+        provider = get_current_storage_provider()
         
         # 本地存储直接返回成功
         if provider == 'local':
@@ -554,7 +742,18 @@ def index():
         return redirect(url_for('first_time_setup'))
     
     if current_user.is_authenticated:
-        return render_template('index.html')
+        # 获取当前存储配置信息用于上传界面显示
+        current_storage_provider = get_current_storage_provider()
+        storage_provider_name = STORAGE_PROVIDERS.get(current_storage_provider, current_storage_provider)
+        
+        # 获取文件大小限制（从配置转换为可读格式）
+        max_size_bytes = app.config.get('MAX_CONTENT_LENGTH', 1024 * 1024 * 1024)
+        max_size_mb = max_size_bytes // (1024 * 1024)
+        
+        return render_template('index.html',
+                             current_storage_provider=current_storage_provider,
+                             storage_provider_name=storage_provider_name,
+                             max_file_size_mb=max_size_mb)
     return redirect(url_for('login'))
 
 @app.route('/first-time-setup', methods=['GET', 'POST'])
@@ -699,16 +898,39 @@ def change_password():
 @app.route('/storage-settings', methods=['GET', 'POST'])
 @login_required
 def storage_settings():
-    """存储设置页面"""
+    """存储设置页面 - 使用数据库优先的配置管理"""
     if request.method == 'POST':
         try:
             # 获取表单数据
             storage_provider = request.form.get('storage_provider', 'local')
             
-            # 更新环境变量文件
-            env_updates = {'STORAGE_PROVIDER': storage_provider}
+            # 保存存储提供商到数据库（主要配置）
+            if not set_current_storage_provider(storage_provider):
+                raise Exception('保存存储提供商到数据库失败')
             
-            # 根据选择的提供商更新对应配置
+            # 保存对应的存储配置到数据库
+            if storage_provider == 'aliyun_oss':
+                set_storage_config('aliyun_oss', 'access_key_id', request.form.get('aliyun_oss_access_key_id', ''))
+                set_storage_config('aliyun_oss', 'access_key_secret', request.form.get('aliyun_oss_access_key_secret', ''))
+                set_storage_config('aliyun_oss', 'endpoint', request.form.get('aliyun_oss_endpoint', ''))
+                set_storage_config('aliyun_oss', 'bucket_name', request.form.get('aliyun_oss_bucket_name', ''))
+            elif storage_provider == 'tencent_cos':
+                set_storage_config('tencent_cos', 'secret_id', request.form.get('tencent_cos_secret_id', ''))
+                set_storage_config('tencent_cos', 'secret_key', request.form.get('tencent_cos_secret_key', ''))
+                set_storage_config('tencent_cos', 'region', request.form.get('tencent_cos_region', ''))
+                set_storage_config('tencent_cos', 'bucket_name', request.form.get('tencent_cos_bucket_name', ''))
+            elif storage_provider == 'qiniu':
+                set_storage_config('qiniu', 'access_key', request.form.get('qiniu_access_key', ''))
+                set_storage_config('qiniu', 'secret_key', request.form.get('qiniu_secret_key', ''))
+                set_storage_config('qiniu', 'bucket_name', request.form.get('qiniu_bucket_name', ''))
+                set_storage_config('qiniu', 'domain', request.form.get('qiniu_domain', ''))
+            elif storage_provider == 'jianguoyun':
+                set_storage_config('jianguoyun', 'webdav_url', request.form.get('jianguoyun_webdav_url', ''))
+                set_storage_config('jianguoyun', 'username', request.form.get('jianguoyun_username', ''))
+                set_storage_config('jianguoyun', 'password', request.form.get('jianguoyun_password', ''))
+            
+            # 同时也更新.env文件（保持兼容性）
+            env_updates = {'STORAGE_PROVIDER': storage_provider}
             if storage_provider == 'aliyun_oss':
                 env_updates.update({
                     'ALIYUN_OSS_ACCESS_KEY_ID': request.form.get('aliyun_oss_access_key_id', ''),
@@ -736,34 +958,34 @@ def storage_settings():
                     'JIANGUOYUN_USERNAME': request.form.get('jianguoyun_username', ''),
                     'JIANGUOYUN_PASSWORD': request.form.get('jianguoyun_password', '')
                 })
-            
-            # 更新.env文件
             update_env_file(env_updates)
             
-            # 热重载环境变量，立即生效
-            reload_storage_config()
-            
+            # 获取当前配置用于显示
+            current_provider = get_current_storage_provider()
             return render_template('storage_settings.html', 
                                  message='存储设置已保存并立即生效！',
                                  providers=STORAGE_PROVIDERS,
-                                 current_provider=storage_provider,
-                                 configs=get_current_storage_configs(),
-                                 configured_providers=get_configured_providers())
+                                 current_provider=current_provider,
+                                 configs=get_current_storage_configs_from_db(),
+                                 configured_providers=get_configured_providers_from_db())
             
         except Exception as e:
+            current_provider = get_current_storage_provider()
             return render_template('storage_settings.html', 
                                  error=f'保存设置失败: {str(e)}',
                                  providers=STORAGE_PROVIDERS,
-                                 current_provider=STORAGE_PROVIDER,
-                                 configs=get_current_storage_configs(),
-                                 configured_providers=get_configured_providers())
+                                 current_provider=current_provider,
+                                 configs=get_current_storage_configs_from_db(),
+                                 configured_providers=get_configured_providers_from_db())
     
     # GET请求，显示当前配置
+    # 使用数据库优先的配置管理
+    current_provider = get_current_storage_provider()
     return render_template('storage_settings.html',
                          providers=STORAGE_PROVIDERS,
-                         current_provider=STORAGE_PROVIDER,
-                         configs=get_current_storage_configs(),
-                         configured_providers=get_configured_providers())
+                         current_provider=current_provider,
+                         configs=get_current_storage_configs_from_db(),
+                         configured_providers=get_configured_providers_from_db())
 
 @app.route('/api/test-storage-connection', methods=['POST'])
 @login_required
@@ -838,25 +1060,33 @@ def logout():
 
 @app.route('/api/storage-config')
 @login_required
-def get_storage_config():
+def api_get_storage_config():
     """获取当前存储配置信息"""
-    # 这里可以从配置文件或环境变量读取
-    # 目前返回默认配置
-    config = {
-        'current_storage': 'local',
-        'storage_name': '本地存储',
-        'storage_icon': 'bi-hdd',
-        'available_storages': [
-            {'type': 'local', 'name': '本地存储', 'icon': 'bi-hdd'},
-            {'type': 'oss', 'name': '阿里云OSS', 'icon': 'bi-cloud'}
-        ]
+    # 使用与主模板相同的逻辑
+    current_storage_provider = get_current_storage_provider()
+    storage_provider_name = STORAGE_PROVIDERS.get(current_storage_provider, current_storage_provider)
+    
+    # 映射存储提供商到图标
+    storage_icons = {
+        'local': 'bi bi-hdd',
+        'aliyun_oss': 'bi bi-cloud',
+        'tencent_cos': 'bi bi-cloud',
+        'qiniu': 'bi bi-cloud',
+        'jianguoyun': 'bi bi-cloud'
     }
     
-    # 检查是否配置了OSS
-    if os.getenv('OSS_ACCESS_KEY_ID'):
-        config['current_storage'] = 'oss'
-        config['storage_name'] = '阿里云OSS'
-        config['storage_icon'] = 'bi-cloud'
+    config = {
+        'current_storage': current_storage_provider,
+        'storage_name': storage_provider_name,
+        'storage_icon': storage_icons.get(current_storage_provider, 'bi bi-question-circle'),
+        'available_storages': [
+            {'type': 'local', 'name': '本地存储', 'icon': 'bi bi-hdd'},
+            {'type': 'aliyun_oss', 'name': '阿里云OSS', 'icon': 'bi bi-cloud'},
+            {'type': 'tencent_cos', 'name': '腾讯云COS', 'icon': 'bi bi-cloud'},
+            {'type': 'qiniu', 'name': '七牛云', 'icon': 'bi bi-cloud'},
+            {'type': 'jianguoyun', 'name': '坚果云', 'icon': 'bi bi-cloud'}
+        ]
+    }
     
     return jsonify(config)
 
@@ -867,8 +1097,8 @@ def upload_file():
         return jsonify({'error': '没有选择文件'}), 400
     
     file = request.files['file']
-    # 使用默认配置的存储方式（可以后续从配置文件读取）
-    storage_type = STORAGE_PROVIDER  # 使用当前配置的存储提供商
+    # 使用数据库优先的存储配置
+    storage_type = get_current_storage_provider()  # 从数据库获取当前配置的存储提供商
     description = ''  # 移除文件描述功能
     
     if file.filename == '':
@@ -931,14 +1161,18 @@ def upload_file():
         final_path = local_path
         
         # 如果选择云存储，上传到云存储
-        if STORAGE_PROVIDER != 'local':
+        if storage_type != 'local':
             cloud_object_name = f"{subfolder}/{unique_filename}"
             success, result = upload_to_cloud_storage(local_path, cloud_object_name)
             if success:
                 final_path = cloud_object_name
-                # 可以选择删除本地文件以节省空间（云存储时）
-                # os.remove(local_path)  # 暂时保留本地副本
-                pass
+                # 云存储成功后删除本地临时文件
+                try:
+                    os.remove(local_path)
+                    print(f"✅ 云存储成功，已删除本地临时文件: {local_path}")
+                except Exception as e:
+                    print(f"⚠️  删除本地临时文件失败: {e}")
+                    # 不影响主流程，继续执行
             else:
                 return jsonify({'error': f'云存储上传失败: {result}'}), 500
         
@@ -951,7 +1185,7 @@ def upload_file():
             file_size=file_size,
             file_path=final_path,
             thumbnail_path=thumbnail_path,
-            storage_type=STORAGE_PROVIDER,
+            storage_type=storage_type,
             user_id=current_user.id
         )
         
@@ -963,7 +1197,7 @@ def upload_file():
             'file_id': media_file.id,
             'filename': original_filename,
             'file_type': file_type,
-            'storage_type': STORAGE_PROVIDER
+            'storage_type': storage_type
         })
     
     return jsonify({'error': '不支持的文件类型'}), 400

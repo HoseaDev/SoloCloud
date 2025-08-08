@@ -216,6 +216,125 @@ docker-compose logs -f solocloud
 
 ---
 
+## 🔄 数据迁移
+
+SoloCloud 支持多种部署方式之间的数据迁移，包括本地Python和Docker部署的相互转换，以及跨机器迁移。
+
+### 📊 数据存储位置
+- **数据库**: `data/SoloCloud.db` (SQLite数据库)
+- **用户文件**: `uploads/` 目录
+- **日志文件**: `logs/` 目录
+- **配置文件**: `.env` 文件
+
+### 🛠️ 迁移工具
+
+项目提供了两个强大的迁移工具：
+
+#### 1. `migrate.sh` - 自动化迁移脚本
+```bash
+# 数据备份和恢复
+./migrate.sh backup                    # 创建数据备份
+./migrate.sh restore <备份文件>         # 从备份恢复数据
+
+# 跨机器迁移
+./migrate.sh export                    # 创建迁移包
+
+# 部署方式转换
+./migrate.sh local-to-docker           # 本地Python → Docker
+./migrate.sh docker-to-local           # Docker → 本地Python
+
+# 查看帮助
+./migrate.sh help
+```
+
+#### 2. `check_migration.py` - 数据完整性检查
+```bash
+python3 check_migration.py status     # 查看当前状态
+python3 check_migration.py snapshot   # 创建状态快照
+python3 check_migration.py compare <快照1> <快照2>  # 比较快照
+```
+
+### 🔄 迁移场景
+
+#### 场景1：本地Python → Docker
+```bash
+# 一键迁移
+./migrate.sh local-to-docker
+
+# 验证迁移结果
+docker-compose logs -f solocloud
+```
+
+#### 场景2：Docker → 本地Python
+```bash
+# 一键迁移
+./migrate.sh docker-to-local
+
+# 启动本地服务
+python3 app.py
+```
+
+#### 场景3：跨机器迁移
+```bash
+# 在源机器上创建迁移包
+./migrate.sh export
+
+# 传输到目标机器
+scp backups/solocloud_migration_*.tar.gz user@target:/path/
+
+# 在目标机器上解压
+tar -xzf solocloud_migration_*.tar.gz
+
+# 启动服务（选择合适的方式）
+./migrate.sh local-to-docker    # 使用Docker
+# 或
+python3 app.py                  # 使用本地Python
+```
+
+### 📝 迁移最佳实践
+
+1. **迁移前检查**
+   ```bash
+   # 创建迁移前快照
+   python3 check_migration.py snapshot
+   
+   # 查看当前状态
+   python3 check_migration.py status
+   ```
+
+2. **执行迁移**
+   ```bash
+   # 使用相应的迁移命令
+   ./migrate.sh <command>
+   ```
+
+3. **迁移后验证**
+   ```bash
+   # 创建迁移后快照
+   python3 check_migration.py snapshot
+   
+   # 比较迁移前后的数据
+   python3 check_migration.py compare \
+     backups/migration_snapshot_before.json \
+     backups/migration_snapshot_after.json
+   ```
+
+### 🔒 数据安全保障
+
+- **自动备份**: 所有迁移操作都会自动创建数据备份
+- **快照比较**: 支持迁移前后的数据完整性验证
+- **环境自适应**: `config.py` 自动检测运行环境并调整路径
+- **单用户保护**: 遵循SoloCloud单用户设计原则
+
+### ⚠️ 注意事项
+
+- 迁移过程中会自动停止相关服务
+- 确保目标环境已安装必要的依赖（Docker或Python）
+- 跨机器迁移时注意网络连通性和权限设置
+- 建议在迁移前测试目标环境的可用性
+
+---
+
 ## 🔧 项目结构
 
 ```
