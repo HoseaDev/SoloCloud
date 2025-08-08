@@ -1,50 +1,45 @@
 FROM python:3.11-slim
 
-# 设置工作目录
+# Faster Python, less disk churn
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1
+
+# Set workdir
 WORKDIR /app
 
-# 安装系统依赖
-RUN apt-get update && apt-get install -y \
-    gcc \
-    g++ \
+# System deps (curl for healthcheck). Use --no-install-recommends to keep image small
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl \
+    build-essential \
     libffi-dev \
     libssl-dev \
-    curl \
     libgl1-mesa-glx \
     libglib2.0-0 \
     libsm6 \
     libxext6 \
-    libxrender-dev \
+    libxrender1 \
     libgomp1 \
-    && rm -rf /var/lib/apt/lists/*
+ && rm -rf /var/lib/apt/lists/*
 
-# 复制依赖文件
-COPY requirements.txt .
+# Python deps
+COPY requirements.txt ./
+RUN pip install --no-cache-dir -r requirements.txt \
+ && pip install --no-cache-dir gunicorn
 
-# 安装Python依赖
-RUN pip install --no-cache-dir -r requirements.txt
-RUN pip install gunicorn
-
-# 复制应用代码
+# App code
 COPY . .
 
-# 创建必要的目录
-RUN mkdir -p logs uploads data
+# Ensure runtime dirs exist (even if bind-mounted later)
+RUN mkdir -p /app/logs /app/uploads /app/data \
+ && chmod 755 /app /app/logs /app/uploads /app/data
 
-# 设置权限
-RUN chmod +x start.sh
-
-# 创建非root用户
-RUN useradd --create-home --shell /bin/bash SoloCloud
-RUN chown -R SoloCloud:SoloCloud /app
-USER SoloCloud
-
-# 暴露端口
+# Expose service port
 EXPOSE 8080
 
-# 健康检查
+# Container healthcheck (standalone-friendly)
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD curl -f http://localhost:8080/health || exit 1
+  CMD curl -fsS http://localhost:8080/health || exit 1
 
-# 启动命令
+# Start app (gunicorn.conf.py should bind 0.0.0.0:8080)
 CMD ["gunicorn", "--config", "gunicorn.conf.py", "app:app"]

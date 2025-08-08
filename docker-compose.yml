@@ -1,4 +1,4 @@
-version: '3.8'
+version: "3.8"
 
 services:
   solocloud:
@@ -6,26 +6,27 @@ services:
     ports:
       - "8080:8080"
     environment:
-      - FLASK_ENV=production
+      # Flask 2.3+ 不再使用 FLASK_ENV，保留更通用的自定义变量（如需）
+      # - APP_ENV=production
       - SECRET_KEY=${SECRET_KEY:-your-secret-key-here}
-      # 系统会自动检测到Docker环境并使用相应路径
-      # 如需自定义路径，可以添加以下环境变量:
-      # - DATABASE_URL=sqlite:////app/data/SoloCloud.db
-      # - UPLOAD_FOLDER=/app/uploads
-      # - LOG_FILE=/app/logs/SoloCloud.log
     volumes:
       - ./data:/app/data
       - ./uploads:/app/uploads
       - ./logs:/app/logs
     restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      test: ["CMD", "curl", "-fsS", "http://localhost:8080/health"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 40s
 
-  # Nginx反向代理（可选）
+  # Nginx 反向代理（可选，用 profiles 控制启用）
   nginx:
     image: nginx:alpine
     ports:
@@ -37,9 +38,4 @@ services:
     depends_on:
       - solocloud
     restart: unless-stopped
-    profiles:
-      - with-nginx
-
-volumes:
-  solocloud_data:
-    driver: local
+    profiles: ["with-nginx"]
