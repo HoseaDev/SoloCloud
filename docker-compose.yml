@@ -8,11 +8,6 @@ services:
     environment:
       - FLASK_ENV=production
       - SECRET_KEY=${SECRET_KEY:-your-secret-key-here}
-      # Docker环境下的会话配置
-      - SESSION_COOKIE_SECURE=false
-      - SESSION_COOKIE_HTTPONLY=true
-      - SESSION_COOKIE_SAMESITE=Lax
-      - SESSION_COOKIE_DOMAIN=
       # 系统会自动检测到Docker环境并使用相应路径
       # 如需自定义路径，可以添加以下环境变量:
       # - DATABASE_URL=sqlite:////app/data/SoloCloud.db
