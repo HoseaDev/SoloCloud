@@ -3,6 +3,7 @@ from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
+from werkzeug.middleware.proxy_fix import ProxyFix
 from datetime import datetime, timedelta
 import os
 import uuid
@@ -162,9 +163,16 @@ def create_app(config_name=None):
     """应用工厂函数"""
     app = Flask(__name__)
     
+    # 配置代理支持，确保正确检测HTTPS
+    app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
+    
     # 加载配置
     config_name = config_name or os.getenv('FLASK_ENV', 'development')
     app.config.from_object(config[config_name])
+    
+    # 强制使用HTTPS生成URL（生产环境）
+    if config_name == 'production' or os.getenv('FORCE_HTTPS', 'false').lower() == 'true':
+        app.config['PREFERRED_URL_SCHEME'] = 'https'
     
     # 初始化扩展
     db.init_app(app)
@@ -1342,7 +1350,8 @@ def create_share_link(file_id):
     db.session.add(share_link)
     db.session.commit()
     
-    share_url = url_for('shared_file', token=token, _external=True)
+    # 确保生成HTTPS链接
+    share_url = url_for('shared_file', token=token, _external=True, _scheme='https' if request.is_secure or request.headers.get('X-Forwarded-Proto') == 'https' else None)
     
     return jsonify({
         'message': '分享链接创建成功',
@@ -1365,7 +1374,7 @@ def list_share_links(file_id):
         'shares': [{
             'id': s.id,
             'token': s.token,
-            'share_url': url_for('shared_file', token=s.token, _external=True),
+            'share_url': url_for('shared_file', token=s.token, _external=True, _scheme='https' if request.is_secure or request.headers.get('X-Forwarded-Proto') == 'https' else None),
             'created_time': s.created_time.isoformat(),
             'expires_at': s.expires_at.isoformat(),
             'access_count': s.access_count,

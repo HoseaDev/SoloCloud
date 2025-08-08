@@ -65,7 +65,9 @@ echo "📦 安装证书..."
 acme.sh --installcert -d "$DOMAIN" --ecc \
   --key-file       "$SSL_DIR/server.key" \
   --fullchain-file "$SSL_DIR/server.crt" \
-  --reloadcmd      "systemctl reload nginx || echo '请手动重启服务'"
+  --reloadcmd      "true"
+
+echo "请手动重启 SoloCloud"
 
 # 检查证书文件生成成功
 if [ ! -s "$SSL_DIR/server.crt" ] || [ ! -s "$SSL_DIR/server.key" ]; then
