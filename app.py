@@ -217,6 +217,29 @@ login_manager.login_message = '请先登录访问此页面'
 # 创建应用实例
 app = create_app()
 
+# Docker环境下的会话配置修复
+if os.getenv('DOCKER_ENV') == 'true' or os.path.exists('/.dockerenv'):
+    print("🐳 Detected Docker environment, applying session fixes...")
+    
+    # 设置会话配置以修复登录重定向问题
+    app.config.update(
+        SESSION_COOKIE_SECURE=os.getenv('SESSION_COOKIE_SECURE', 'false').lower() == 'true',
+        SESSION_COOKIE_HTTPONLY=os.getenv('SESSION_COOKIE_HTTPONLY', 'true').lower() == 'true',
+        SESSION_COOKIE_SAMESITE=os.getenv('SESSION_COOKIE_SAMESITE', 'Lax'),
+        SESSION_COOKIE_DOMAIN=os.getenv('SESSION_COOKIE_DOMAIN', None) or None,
+        # 确保会话不会因为代理而失效
+        APPLICATION_ROOT='/',
+        PREFERRED_URL_SCHEME='http'
+    )
+    
+    # 如果没有设置SECRET_KEY，生成一个
+    if not app.config.get('SECRET_KEY') or app.config['SECRET_KEY'] == 'your-secret-key-here':
+        import secrets
+        app.config['SECRET_KEY'] = secrets.token_hex(32)
+        print("🔐 Generated new SECRET_KEY for Docker environment")
+    
+    print("✅ Docker session configuration applied")
+
 # 本地存储配置 - 使用Flask配置中的上传文件夹
 UPLOAD_FOLDER = app.config['UPLOAD_FOLDER']
 # 移除文件格式限制，允许上传任何类型的文件

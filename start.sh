@@ -6,19 +6,36 @@
 export FLASK_ENV=production
 export FLASK_APP=app.py
 
-# 创建必要的目录
-mkdir -p /app/logs
-mkdir -p /app/data
-mkdir -p /app/uploads
+# 设置Docker环境下的会话配置
+export SESSION_COOKIE_SECURE=false
+export SESSION_COOKIE_HTTPONLY=true
+export SESSION_COOKIE_SAMESITE=Lax
 
-# 设置权限
-chmod 755 /app/logs
-chmod 755 /app/data
-chmod 755 /app/uploads
+# 创建必要的目录结构
+echo "Setting up directories..."
+mkdir -p /app/logs /app/data /app/uploads
+mkdir -p /app/uploads/{images,videos,audio,files,archives,code,thumbnails,chat,chat_thumbnails}
 
-# 激活虚拟环境（如果使用）
-# source venv/bin/activate
+# 确保目录权限正确（如果以root启动则需要调整权限）
+if [ "$(id -u)" = "0" ]; then
+    echo "Running as root, adjusting permissions..."
+    chown -R SoloCloud:SoloCloud /app/logs /app/data /app/uploads
+    chmod -R 755 /app/logs /app/data /app/uploads
+    # 切换到SoloCloud用户执行
+    exec su-exec SoloCloud "$0" "$@"
+fi
+
+# 确保当前用户有写权限
+chmod -R u+w /app/logs /app/data /app/uploads 2>/dev/null || true
+
+# 等待一下确保目录创建完成
+sleep 1
 
 # 启动应用
 echo "Starting SoloCloud in production mode..."
-gunicorn --config gunicorn.conf.py app:app
+echo "Directories created and permissions set."
+echo "Logs: $(ls -la /app/logs 2>/dev/null || echo 'Directory not accessible')"
+echo "Data: $(ls -la /app/data 2>/dev/null || echo 'Directory not accessible')"
+echo "Uploads: $(ls -la /app/uploads 2>/dev/null || echo 'Directory not accessible')"
+
+exec gunicorn --config gunicorn.conf.py app:app
