@@ -16,7 +16,6 @@ RUN apt-get update && apt-get install -y \
     libxext6 \
     libxrender-dev \
     libgomp1 \
-    su-exec \
     && rm -rf /var/lib/apt/lists/*
 
 # 复制依赖文件

@@ -16,16 +16,7 @@ echo "Setting up directories..."
 mkdir -p /app/logs /app/data /app/uploads
 mkdir -p /app/uploads/{images,videos,audio,files,archives,code,thumbnails,chat,chat_thumbnails}
 
-# 确保目录权限正确（如果以root启动则需要调整权限）
-if [ "$(id -u)" = "0" ]; then
-    echo "Running as root, adjusting permissions..."
-    chown -R SoloCloud:SoloCloud /app/logs /app/data /app/uploads
-    chmod -R 755 /app/logs /app/data /app/uploads
-    # 切换到SoloCloud用户执行
-    exec su-exec SoloCloud "$0" "$@"
-fi
-
-# 确保当前用户有写权限
+# 确保当前用户有写权限（简化权限处理）
 chmod -R u+w /app/logs /app/data /app/uploads 2>/dev/null || true
 
 # 等待一下确保目录创建完成

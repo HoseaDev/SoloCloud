@@ -39,23 +39,21 @@ def setup_directories():
             print(f"❌ Failed to create {directory}: {e}")
             return False
     
-    # 设置权限
+    # 设置权限（简化处理，只确保写权限）
     try:
-        current_user = os.getuid()
-        current_group = os.getgid()
-        
         for directory in directories:
             if os.path.exists(directory):
-                # 设置目录权限为755 (rwxr-xr-x)
-                os.chmod(directory, stat.S_IRWXU | stat.S_IRGRP | stat.S_IXGRP | stat.S_IROTH | stat.S_IXOTH)
-                # 确保当前用户拥有该目录
-                os.chown(directory, current_user, current_group)
-                print(f"✅ Set permissions for: {directory}")
+                # 设置目录权限为755 (rwxr-xr-x)，但忽略chown错误
+                try:
+                    os.chmod(directory, stat.S_IRWXU | stat.S_IRGRP | stat.S_IXGRP | stat.S_IROTH | stat.S_IXOTH)
+                    print(f"✅ Set permissions for: {directory}")
+                except PermissionError:
+                    print(f"⚠️  Permission warning for {directory}, but continuing...")
         
         return True
     except Exception as e:
-        print(f"❌ Failed to set permissions: {e}")
-        return False
+        print(f"⚠️  Permission setup had issues but continuing: {e}")
+        return True  # 继续执行，不因权限问题而失败
 
 def setup_environment():
     """设置Docker环境变量"""
