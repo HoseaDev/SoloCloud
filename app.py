@@ -82,6 +82,21 @@ def get_remaining_attempts(ip):
 
 def init_database():
     """初始化数据库表结构"""
+    # 首先创建必要的目录
+    import os
+    required_dirs = ['data', 'uploads', 'logs']
+    for dir_name in required_dirs:
+        if not os.path.exists(dir_name):
+            os.makedirs(dir_name, exist_ok=True)
+            print(f"📁 创建目录: {dir_name}/")
+    
+    # 创建上传文件子目录
+    upload_subdirs = ['images', 'videos', 'audio', 'files', 'archives', 'code', 'thumbnails', 'chat', 'chat_thumbnails']
+    for subdir in upload_subdirs:
+        subdir_path = os.path.join('uploads', subdir)
+        if not os.path.exists(subdir_path):
+            os.makedirs(subdir_path, exist_ok=True)
+    
     try:
         from sqlalchemy import inspect
         inspector = inspect(db.engine)
@@ -108,8 +123,12 @@ def init_database():
             
     except Exception as e:
         print(f"🛠️  数据库初始化错误，重新创建: {e}")
-        db.drop_all()
-        db.create_all()
+        try:
+            db.create_all()
+            print("✅ 数据库表创建成功")
+        except Exception as create_error:
+            print(f"❌ 数据库表创建失败: {create_error}")
+            raise
     
     # 确保单用户系统
     ensure_single_user_system()
@@ -573,9 +592,13 @@ def first_time_setup():
         try:
             db.session.add(user)
             db.session.commit()
+            print(f"✅ 用户创建成功: {username}")
         except Exception as e:
             db.session.rollback()
-            return render_template('first_time_setup.html', error='用户创建失败，请重试')
+            print(f"❌ 用户创建失败: {str(e)}")
+            import traceback
+            traceback.print_exc()
+            return render_template('first_time_setup.html', error=f'用户创建失败: {str(e)}')
         
         # 自动登录
         login_user(user)
