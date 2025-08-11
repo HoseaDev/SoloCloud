@@ -3,7 +3,7 @@
 # SoloCloud 启动脚本
 
 # 设置环境变量
-export FLASK_ENV=production
+export FLASK_ENV=development
 export FLASK_APP=app.py
 
 # 创建必要的目录
@@ -20,5 +20,5 @@ chmod 755 /app/uploads
 # source venv/bin/activate
 
 # 启动应用
-echo "Starting SoloCloud in production mode..."
+echo "Starting SoloCloud in development mode..."
 gunicorn --config gunicorn.conf.py app:app
