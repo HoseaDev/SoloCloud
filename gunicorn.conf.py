@@ -7,7 +7,7 @@ bind = "0.0.0.0:8080"
 workers = multiprocessing.cpu_count() * 2 + 1
 worker_class = "sync"
 worker_connections = 1000
-timeout = 30
+timeout = 600  # 增加到10分钟，支持大文件上传
 keepalive = 2
 
 # 进程管理

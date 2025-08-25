@@ -6,7 +6,7 @@ def is_docker():
     return os.path.exists('/.dockerenv')
 
 class Config:
-    """基础配置 - 自动检测环境，优先使用环境变量"""
+    """统一配置 - 自动适应环境"""
     SECRET_KEY = os.environ.get('SECRET_KEY') or 'dev-secret-key-change-in-production'
     
     # 数据库配置 - 环境变量优先，否则自动检测
@@ -24,38 +24,32 @@ class Config:
     # 存储配置
     STORAGE_PROVIDER = os.environ.get('STORAGE_PROVIDER') or 'local'
     
-    # 会话配置
+    # 会话配置 - 自动适应HTTP/HTTPS
     PERMANENT_SESSION_LIFETIME = timedelta(days=7)
-    SESSION_COOKIE_SECURE = False  # 开发环境
     SESSION_COOKIE_HTTPONLY = True
     SESSION_COOKIE_SAMESITE = 'Lax'
+    # SESSION_COOKIE_SECURE 将在运行时根据实际协议设置
+    
+    # 调试模式 - 通过环境变量控制
+    DEBUG = os.environ.get('DEBUG', 'False').lower() in ['true', '1', 'yes']
+    TESTING = os.environ.get('TESTING', 'False').lower() in ['true', '1', 'yes']
     
     # 日志配置 - 环境变量优先，否则自动检测
-    LOG_LEVEL = os.environ.get('LOG_LEVEL') or 'INFO'
+    LOG_LEVEL = os.environ.get('LOG_LEVEL') or ('DEBUG' if DEBUG else 'INFO')
     LOG_FILE = os.environ.get('LOG_FILE') or (
         '/app/logs/SoloCloud.log' if is_docker() else 'logs/SoloCloud.log'
     )
     LOG_MAX_BYTES = 10 * 1024 * 1024  # 10MB
     LOG_BACKUP_COUNT = 5
 
+# 为了向后兼容，保留原有的配置映射
 class DevelopmentConfig(Config):
-    """开发环境配置"""
-    DEBUG = True
-    TESTING = False
-    LOG_LEVEL = 'DEBUG'
+    """开发环境配置（向后兼容）"""
+    pass
 
 class ProductionConfig(Config):
-    """生产环境配置 - 继承基础配置的自动适应能力"""
-    DEBUG = False
-    TESTING = False
-    
-    # 生产环境安全配置
-    SESSION_COOKIE_SECURE = True  # HTTPS only
-    SESSION_COOKIE_HTTPONLY = True
-    SESSION_COOKIE_SAMESITE = 'Strict'
-    
-    # 生产环境日志级别（路径继承自基础配置）
-    LOG_LEVEL = os.environ.get('LOG_LEVEL') or 'WARNING'
+    """生产环境配置（向后兼容）"""
+    pass
 
 class TestingConfig(Config):
     """测试环境配置"""
@@ -65,8 +59,8 @@ class TestingConfig(Config):
 
 # 配置映射
 config = {
-    'development': DevelopmentConfig,
-    'production': ProductionConfig,
+    'development': Config,  # 现在都使用统一的Config
+    'production': Config,   # 现在都使用统一的Config
     'testing': TestingConfig,
-    'default': DevelopmentConfig
+    'default': Config
 }

@@ -998,12 +998,21 @@
                                     <div class="mb-3">
                                         <label class="form-label">支持格式</label>
                                         <div class="small text-muted">
-                                            <div><i class="bi bi-image text-primary"></i> 图片: JPG, PNG, GIF, WebP</div>
-                                            <div><i class="bi bi-play-circle text-success"></i> 视频: MP4, AVI, MOV, WebM</div>
-                                            <div><i class="bi bi-file-earmark text-info"></i> 文档: PDF, DOC, TXT, 等</div>
-                                            <div><i class="bi bi-file-zip text-warning"></i> 压缩包: ZIP, RAR, 7Z</div>
-                                            <div><i class="bi bi-code-slash text-secondary"></i> 代码: JS, PY, HTML, CSS</div>
+                                            <div><i class="bi bi-check-circle text-success"></i> 现在支持所有文件格式</div>
+                                            <div><i class="bi bi-link-45deg text-primary"></i> 支持从URL下载文件</div>
+                                            <div><i class="bi bi-clipboard text-info"></i> 粘贴图片/文件URL自动下载</div>
                                         </div>
+                                    </div>
+                                    
+                                    <div class="mb-3">
+                                        <label class="form-label">URL下载</label>
+                                        <div class="input-group">
+                                            <input type="text" class="form-control" id="urlInput" placeholder="粘贴文件或图片URL...">
+                                            <button class="btn btn-primary" id="downloadFromUrlBtn">
+                                                <i class="bi bi-download"></i> 下载
+                                            </button>
+                                        </div>
+                                        <small class="text-muted">支持直接粘贴图片或文件的URL地址</small>
                                     </div>
                                 </div>
                             </div>

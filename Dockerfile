@@ -1,45 +1,74 @@
-FROM python:3.11-slim
+# 多阶段构建 - 构建阶段
+FROM python:3.11-slim as builder
 
-# Faster Python, less disk churn
-ENV PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONUNBUFFERED=1 \
-    PIP_NO_CACHE_DIR=1
-
-# Set workdir
+# 设置工作目录
 WORKDIR /app
 
-# System deps (curl for healthcheck). Use --no-install-recommends to keep image small
+# 安装构建依赖
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    curl \
     build-essential \
     libffi-dev \
     libssl-dev \
-    libgl1-mesa-glx \
+    && rm -rf /var/lib/apt/lists/*
+
+# 复制依赖文件
+COPY requirements.txt .
+
+# 创建虚拟环境并安装依赖
+RUN python -m venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
+RUN pip install --no-cache-dir --upgrade pip setuptools wheel \
+    && pip install --no-cache-dir -r requirements.txt \
+    && pip install --no-cache-dir gunicorn
+
+# 运行阶段
+FROM python:3.11-slim
+
+# 设置环境变量
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PATH="/opt/venv/bin:$PATH" \
+    PYTHONPATH=/app
+
+# 安装运行时依赖
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl \
+    libgl1 \
     libglib2.0-0 \
     libsm6 \
     libxext6 \
     libxrender1 \
     libgomp1 \
- && rm -rf /var/lib/apt/lists/*
+    && rm -rf /var/lib/apt/lists/* \
+    && apt-get clean
 
-# Python deps
-COPY requirements.txt ./
-RUN pip install --no-cache-dir -r requirements.txt \
- && pip install --no-cache-dir gunicorn
+# 创建非root用户
+RUN groupadd -r solocloud && useradd -r -g solocloud solocloud
 
-# App code
-COPY . .
+# 设置工作目录
+WORKDIR /app
 
-# Ensure runtime dirs exist (even if bind-mounted later)
+# 从构建阶段复制虚拟环境
+COPY --from=builder /opt/venv /opt/venv
+
+# 复制应用代码
+COPY --chown=solocloud:solocloud . .
+
+# 创建必要的目录并设置权限
 RUN mkdir -p /app/logs /app/uploads /app/data \
- && chmod 755 /app /app/logs /app/uploads /app/data
+    && chown -R solocloud:solocloud /app \
+    && chmod 755 /app /app/logs /app/uploads /app/data
 
-# Expose service port
+# 切换到非root用户
+USER solocloud
+
+# 暴露端口
 EXPOSE 8080
 
-# Container healthcheck (standalone-friendly)
+# 健康检查
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-  CMD curl -fsS http://localhost:8080/health || exit 1
+    CMD curl -fsS http://localhost:8080/health || exit 1
 
-# Start app (gunicorn.conf.py should bind 0.0.0.0:8080)
+# 启动命令
 CMD ["gunicorn", "--config", "gunicorn.conf.py", "app:app"]

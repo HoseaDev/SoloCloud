@@ -14,6 +14,9 @@ import cv2
 import numpy as np
 from cloud_storage import CloudStorageManager
 from dotenv import load_dotenv
+import requests
+from urllib.parse import urlparse, unquote
+import tempfile
 
 # 导入新的配置和错误处理模块
 from config import config
@@ -166,13 +169,12 @@ def create_app(config_name=None):
     # 配置代理支持，确保正确检测HTTPS
     app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1)
     
-    # 加载配置
-    config_name = config_name or os.getenv('FLASK_ENV', 'development')
+    # 加载配置 - 默认使用统一的Config
+    config_name = config_name or 'default'
     app.config.from_object(config[config_name])
     
-    # 强制使用HTTPS生成URL（生产环境）
-    if config_name == 'production' or os.getenv('FORCE_HTTPS', 'false').lower() == 'true':
-        app.config['PREFERRED_URL_SCHEME'] = 'https'
+    # 自动适应访问协议 - 不强制HTTPS
+    # ProxyFix会自动处理X-Forwarded-Proto头，让Flask知道实际的协议
     
     # 初始化扩展
     db.init_app(app)
@@ -204,14 +206,22 @@ def create_app(config_name=None):
     # 在应用启动后初始化数据库
     app.before_request(initialize_database)
     
+    # 动态设置Cookie安全属性 - 根据实际访问协议
+    @app.before_request
+    def set_cookie_security():
+        """根据实际访问协议动态设置Cookie安全属性"""
+        # 检查是否通过HTTPS访问
+        is_https = request.is_secure or request.headers.get('X-Forwarded-Proto', '').lower() == 'https'
+        # 只在HTTPS下启用Secure Cookie
+        app.config['SESSION_COOKIE_SECURE'] = is_https
+    
     # 添加健康检查路由
     @app.route('/health')
     def health_check():
         return jsonify({
             'status': 'healthy',
             'timestamp': datetime.utcnow().isoformat(),
-            'version': '1.0.0',
-            'environment': config_name
+            'version': '1.0.0'
         })
     
     return app
@@ -500,33 +510,12 @@ def get_configured_providers_from_db():
 
 # 工具函数
 def allowed_file(filename):
-    """检查文件类型是否被允许上传"""
+    """检查文件类型是否被允许上传 - 现在允许所有文件类型"""
     if not filename or filename.strip() == '':
         return False
     
-    # 定义允许的文件扩展名
-    ALLOWED_EXTENSIONS = {
-        # 图片文件
-        'jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp', 'svg', 'ico', 'tiff', 'tif',
-        # 视频文件
-        'mp4', 'avi', 'mov', 'wmv', 'flv', 'webm', 'mkv', 'm4v', '3gp', 'mpg', 'mpeg',
-        # 音频文件
-        'mp3', 'wav', 'flac', 'aac', 'ogg', 'wma', 'm4a',
-        # 文档文件
-        'pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'txt', 'rtf', 'odt', 'ods', 'odp',
-        # 压缩文件
-        'zip', 'rar', '7z', 'tar', 'gz', 'bz2', 'xz',
-        # 代码文件
-        'html', 'htm', 'css', 'js', 'json', 'xml', 'py', 'java', 'cpp', 'c', 'h', 'php', 'rb', 'go', 'rs', 'swift',
-        'sql', 'sh', 'bat', 'ps1', 'yml', 'yaml', 'toml', 'ini', 'cfg', 'conf', 'md', 'rst',
-        # 其他常用文件
-        'csv', 'tsv', 'log', 'backup', 'bak'
-    }
-    
-    # 获取文件扩展名
-    file_ext = filename.rsplit('.', 1)[1].lower() if '.' in filename else ''
-    
-    return file_ext in ALLOWED_EXTENSIONS
+    # 不再限制文件类型，允许所有文件
+    return True
 
 def get_file_type(filename):
     # 处理没有扩展名的文件
@@ -1209,6 +1198,128 @@ def upload_file():
         })
     
     return jsonify({'error': '不支持的文件类型'}), 400
+
+@app.route('/api/upload-from-url', methods=['POST'])
+@login_required
+def upload_from_url():
+    """从URL下载文件并保存"""
+    data = request.get_json()
+    url = data.get('url', '').strip()
+    
+    if not url:
+        return jsonify({'error': '请提供有效的URL'}), 400
+    
+    try:
+        # 发送请求获取文件
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+        }
+        response = requests.get(url, headers=headers, stream=True, timeout=30)
+        response.raise_for_status()
+        
+        # 获取文件名
+        content_disposition = response.headers.get('content-disposition')
+        if content_disposition:
+            import re
+            filename_match = re.findall('filename="?([^"]+)"?', content_disposition)
+            if filename_match:
+                original_filename = secure_filename(filename_match[0])
+            else:
+                original_filename = secure_filename(os.path.basename(urlparse(url).path))
+        else:
+            original_filename = secure_filename(os.path.basename(urlparse(url).path))
+        
+        # 如果没有文件名，使用URL的最后部分或生成一个
+        if not original_filename or original_filename == '':
+            # 尝试从Content-Type猜测扩展名
+            content_type = response.headers.get('content-type', '').split(';')[0]
+            ext = mimetypes.guess_extension(content_type) or ''
+            original_filename = f"download_{uuid.uuid4().hex[:8]}{ext}"
+        
+        # 生成唯一文件名
+        if '.' in original_filename:
+            file_ext = original_filename.rsplit('.', 1)[1].lower()
+            unique_filename = f"{uuid.uuid4().hex}.{file_ext}"
+        else:
+            unique_filename = f"{uuid.uuid4().hex}"
+        
+        file_type = get_file_type(original_filename)
+        
+        # 根据文件类型确定存储路径
+        if file_type == 'image':
+            subfolder = 'images'
+        elif file_type == 'video':
+            subfolder = 'videos'
+        elif file_type == 'audio':
+            subfolder = 'audio'
+        elif file_type == 'archive':
+            subfolder = 'archives'
+        elif file_type == 'code':
+            subfolder = 'code'
+        else:
+            subfolder = 'files'
+        
+        local_path = os.path.join(UPLOAD_FOLDER, subfolder, unique_filename)
+        
+        # 下载并保存文件
+        os.makedirs(os.path.dirname(local_path), exist_ok=True)
+        with open(local_path, 'wb') as f:
+            for chunk in response.iter_content(chunk_size=8192):
+                if chunk:
+                    f.write(chunk)
+        
+        file_size = os.path.getsize(local_path)
+        
+        # 创建缩略图（对图片和视频）
+        thumbnail_path = None
+        if file_type == 'image':
+            thumbnail_path = create_thumbnail(local_path, unique_filename)
+        elif file_type == 'video':
+            thumbnail_path = create_video_thumbnail(local_path, unique_filename)
+        
+        # 使用数据库优先的存储配置
+        storage_type = get_current_storage_provider()
+        
+        # 如果使用云存储，上传文件
+        final_path = local_path
+        if storage_type != 'local':
+            cloud_path = f"{subfolder}/{unique_filename}"
+            success, message = storage_manager.upload_file(local_path, cloud_path)
+            if success:
+                final_path = cloud_path
+                # 删除本地文件（保留缩略图）
+                os.remove(local_path)
+        
+        # 保存到数据库
+        media_file = MediaFile(
+            filename=unique_filename,
+            original_filename=original_filename,
+            file_type=file_type,
+            mime_type=mimetypes.guess_type(original_filename)[0] or 'application/octet-stream',
+            file_size=file_size,
+            file_path=final_path,
+            thumbnail_path=thumbnail_path,
+            storage_type=storage_type,
+            description='',
+            user_id=current_user.id
+        )
+        
+        db.session.add(media_file)
+        db.session.commit()
+        
+        return jsonify({
+            'message': '文件下载并保存成功',
+            'file_id': media_file.id,
+            'filename': original_filename,
+            'file_type': file_type,
+            'storage_type': storage_type,
+            'source_url': url
+        })
+        
+    except requests.exceptions.RequestException as e:
+        return jsonify({'error': f'下载失败: {str(e)}'}), 400
+    except Exception as e:
+        return jsonify({'error': f'处理失败: {str(e)}'}), 500
 
 @app.route('/api/files')
 @login_required

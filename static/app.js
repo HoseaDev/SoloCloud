@@ -22,6 +22,91 @@ function showPasteNotification(fileCount) {
     showToast(message, 'success', 3000);
 }
 
+// 验证URL
+function isValidUrl(string) {
+    try {
+        const url = new URL(string);
+        return url.protocol === 'http:' || url.protocol === 'https:';
+    } catch (_) {
+        return false;
+    }
+}
+
+// 从URL下载文件
+function downloadFromUrl(url) {
+    const uploadList = document.getElementById('uploadList');
+    const uploadProgress = document.getElementById('uploadProgress');
+    
+    // 显示上传进度区域
+    uploadProgress.style.display = 'block';
+    
+    // 创建上传项目的HTML
+    const uploadItem = document.createElement('div');
+    uploadItem.className = 'upload-item mb-3 p-3 border rounded';
+    uploadItem.innerHTML = `
+        <div class="d-flex justify-content-between align-items-center mb-2">
+            <div>
+                <strong>下载URL文件</strong>
+                <small class="text-muted d-block">${url.substring(0, 50)}${url.length > 50 ? '...' : ''}</small>
+            </div>
+            <span class="upload-status badge bg-info">正在下载...</span>
+        </div>
+        <div class="progress mb-2">
+            <div class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" style="width: 100%">下载中...</div>
+        </div>
+        <div class="upload-details text-muted small">正在从URL下载文件...</div>
+    `;
+    
+    uploadList.appendChild(uploadItem);
+    
+    const statusBadge = uploadItem.querySelector('.upload-status');
+    const progressBar = uploadItem.querySelector('.progress-bar');
+    const detailsDiv = uploadItem.querySelector('.upload-details');
+    
+    // 发送请求
+    fetch('/api/upload-from-url', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ url: url })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.message) {
+            statusBadge.textContent = '下载成功';
+            statusBadge.className = 'upload-status badge bg-success';
+            progressBar.classList.remove('progress-bar-striped', 'progress-bar-animated');
+            progressBar.textContent = '100%';
+            detailsDiv.textContent = `文件 "${data.filename}" 已成功保存`;
+            
+            // 清空URL输入框
+            const urlInput = document.getElementById('urlInput');
+            if (urlInput) {
+                urlInput.value = '';
+            }
+            
+            // 刷新文件列表
+            setTimeout(() => {
+                loadFiles();
+            }, 1000);
+        } else {
+            statusBadge.textContent = '下载失败';
+            statusBadge.className = 'upload-status badge bg-danger';
+            progressBar.classList.remove('progress-bar-striped', 'progress-bar-animated');
+            progressBar.classList.add('bg-danger');
+            detailsDiv.textContent = data.error || '下载失败';
+        }
+    })
+    .catch(error => {
+        statusBadge.textContent = '下载失败';
+        statusBadge.className = 'upload-status badge bg-danger';
+        progressBar.classList.remove('progress-bar-striped', 'progress-bar-animated');
+        progressBar.classList.add('bg-danger');
+        detailsDiv.textContent = '网络错误: ' + error.message;
+    });
+}
+
 // 加载存储配置信息
 function loadStorageConfig() {
     fetch('/api/storage-config')
@@ -194,6 +279,8 @@ function initializeFileManagement() {
 function initializeFileUpload() {
     const uploadArea = document.getElementById('uploadArea');
     const fileInput = document.getElementById('fileInput');
+    const urlInput = document.getElementById('urlInput');
+    const downloadFromUrlBtn = document.getElementById('downloadFromUrlBtn');
     
     // 拖拽上传
     uploadArea.addEventListener('dragover', function(e) {
@@ -219,49 +306,78 @@ function initializeFileUpload() {
     
     // 粘贴上传功能
     document.addEventListener('paste', function(e) {
-        console.log('粘贴事件被触发'); // 调试信息
-        
         // 检查是否在上传区域或者文件管理页面
         const activeSection = document.querySelector('.content-section[style*="block"]');
-        console.log('当前活跃页面:', activeSection ? activeSection.id : 'none'); // 调试信息
         
         // 允许在文件管理页面和上传页面使用粘贴功能
         if (!activeSection || (activeSection.id !== 'files-section' && activeSection.id !== 'upload-section')) {
-            console.log('不在允许的页面，退出'); // 调试信息
+            return;
+        }
+        
+        // 如果焦点在URL输入框，让默认粘贴行为处理
+        if (document.activeElement && document.activeElement.id === 'urlInput') {
             return;
         }
         
         const clipboardItems = e.clipboardData.items;
-        console.log('剪贴板项目数量:', clipboardItems.length); // 调试信息
         const files = [];
+        let textContent = '';
         
         for (let i = 0; i < clipboardItems.length; i++) {
             const item = clipboardItems[i];
-            console.log(`项目 ${i}:`, item.kind, item.type); // 调试信息
             
             // 检查是否为文件类型
             if (item.kind === 'file') {
                 const file = item.getAsFile();
                 if (file) {
-                    console.log('找到文件:', file.name, file.size); // 调试信息
                     files.push(file);
                 }
+            } else if (item.kind === 'string' && item.type === 'text/plain') {
+                // 获取文本内容，可能是URL
+                item.getAsString(function(text) {
+                    // 检查是否是URL
+                    if (isValidUrl(text)) {
+                        // 自动填充到URL输入框
+                        if (urlInput) {
+                            urlInput.value = text;
+                            // 自动触发下载
+                            downloadFromUrl(text);
+                        }
+                    }
+                });
             }
         }
         
-        console.log('总共找到文件数量:', files.length); // 调试信息
-        
         if (files.length > 0) {
             e.preventDefault();
-            console.log('开始上传文件'); // 调试信息
             handleFileUpload(files);
             
             // 显示粘贴提示
             showPasteNotification(files.length);
-        } else {
-            console.log('剪贴板中没有文件'); // 调试信息
         }
     });
+    
+    // URL下载按钮事件
+    if (downloadFromUrlBtn) {
+        downloadFromUrlBtn.addEventListener('click', function() {
+            const url = urlInput.value.trim();
+            if (url) {
+                downloadFromUrl(url);
+            }
+        });
+    }
+    
+    // URL输入框回车事件
+    if (urlInput) {
+        urlInput.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                const url = this.value.trim();
+                if (url) {
+                    downloadFromUrl(url);
+                }
+            }
+        });
+    }
     
     // 清空上传历史按钮事件
     const clearHistoryBtn = document.getElementById('clearUploadHistory');
