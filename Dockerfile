@@ -60,8 +60,8 @@ RUN mkdir -p /app/logs /app/uploads /app/data \
     && chown -R solocloud:solocloud /app \
     && chmod 755 /app /app/logs /app/uploads /app/data
 
-# 切换到非root用户
-USER solocloud
+# 切换到非root用户（暂时禁用，以root运行）
+# USER solocloud
 
 # 暴露端口
 EXPOSE 8080
