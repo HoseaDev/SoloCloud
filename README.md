@@ -60,59 +60,179 @@
 
 ---
 
-## 🚀 快速开始
+## 🚀 部署指南
 
-### 方式一：Docker 部署（推荐）
+### 前置要求
+
+- **服务器要求**：Linux 服务器（Ubuntu/Debian/CentOS）
+- **最低配置**：1核1G内存，10GB磁盘空间
+- **软件要求**：Docker 20.10+ 和 Docker Compose v2
+- **网络要求**：开放 80 和 443 端口
+
+### 一、快速部署（5分钟）
 
 ```bash
 # 1. 克隆项目
 git clone https://github.com/HoseaDev/SoloCloud.git
 cd SoloCloud
 
-# 2. 配置环境变量
+# 2. 生成安全密钥并配置
 cp .env.example .env
-# 编辑 .env 文件，设置 SECRET_KEY 等配置
-nano .env
+# 生成随机密钥
+sed -i "s/your-secret-key-here-please-change-this/$(openssl rand -hex 32)/g" .env
 
 # 3. 启动服务
 docker compose up -d
 
-# 4. 访问应用
-open http://localhost
+# 4. 检查运行状态
+docker compose ps
+# 应该看到 solocloud-app 和 solocloud-nginx 都是 running 状态
+
+# 5. 访问应用
+# 浏览器打开 http://你的服务器IP
+# 首次访问会自动跳转到设置页面，创建管理员账号
 ```
 
-### 方式二：使用启动脚本
+### 二、配置 HTTPS（推荐）
+
+#### 方法1：使用 Let's Encrypt（免费证书）
 
 ```bash
-./docker-start.sh start    # 启动服务
-./docker-start.sh stop     # 停止服务
-./docker-start.sh restart  # 重启服务
-./docker-start.sh rebuild  # 重新构建
-./docker-start.sh logs     # 查看日志
-./docker-start.sh status   # 查看状态
+# 1. 确保域名已解析到服务器IP
+
+# 2. 申请证书
+./ssl_setup.sh yourdomain.com your@email.com
+
+# 3. 配置自动续期
+./ssl_renewal.sh --setup-cron
+
+# 4. 访问 https://yourdomain.com
 ```
 
-### 方式三：传统部署
+#### 方法2：使用自有证书
 
 ```bash
-# 1. 环境要求
-# Python 3.11+, pip, virtualenv
+# 1. 上传证书文件
+mkdir -p ssl
+# 将证书文件上传到服务器，然后：
+cp /path/to/your.crt ssl/server.crt
+cp /path/to/your.key ssl/server.key
 
-# 2. 创建虚拟环境
-python3 -m venv venv
-source venv/bin/activate  # Linux/Mac
+# 2. 修改 nginx.conf 中的 server_name
+nano nginx.conf
+# 将 nnn.li 改为你的域名
 
-# 3. 安装依赖
-pip install -r requirements.txt
+# 3. 重启服务
+docker compose restart nginx
+```
 
-# 4. 配置环境变量
-cp .env.example .env
-nano .env
+### 三、数据存储配置
 
-# 5. 启动应用
-python app.py
-# 或使用 Gunicorn
-gunicorn --config gunicorn.conf.py app:app
+编辑 `.env` 文件配置存储路径：
+
+```bash
+# 使用外部磁盘存储（推荐用于大量文件）
+DATA_PATH=/mnt/disk/solocloud/data
+UPLOADS_PATH=/mnt/disk/solocloud/uploads
+LOGS_PATH=/mnt/disk/solocloud/logs
+
+# 或使用默认本地存储
+DATA_PATH=./data
+UPLOADS_PATH=./uploads
+LOGS_PATH=./logs
+```
+
+### 四、更新与维护
+
+#### 更新到最新版本
+
+```bash
+# 1. 备份数据
+./migrate.sh backup
+
+# 2. 拉取最新代码
+git pull
+
+# 3. 重建并启动
+docker compose down
+docker compose up -d --build
+
+# 4. 检查日志
+docker compose logs -f
+```
+
+#### 日常维护命令
+
+```bash
+# 查看运行状态
+docker compose ps
+
+# 查看日志
+docker compose logs -f          # 所有日志
+docker compose logs -f solocloud # 仅应用日志
+docker compose logs -f nginx    # 仅Nginx日志
+
+# 重启服务
+docker compose restart
+
+# 停止服务
+docker compose down
+
+# 清理磁盘空间
+docker system prune -a  # 清理Docker缓存
+```
+
+### 五、故障排查
+
+#### 1. 无法访问网站
+
+```bash
+# 检查容器状态
+docker compose ps
+
+# 检查端口占用
+netstat -tlnp | grep -E ":80|:443"
+
+# 查看错误日志
+docker compose logs --tail=50
+```
+
+#### 2. 文件上传失败
+
+```bash
+# 检查权限
+ls -la uploads/ data/ logs/
+
+# 修复权限
+chmod -R 777 uploads data logs
+```
+
+#### 3. 容器启动失败
+
+```bash
+# 查看详细错误
+docker compose logs solocloud
+
+# 如果是权限问题，可以让容器以 root 运行
+# 编辑 Dockerfile，注释掉 USER solocloud 行
+nano Dockerfile
+# 找到 "USER solocloud" 行，在前面加 #
+# 然后重建：
+docker compose build --no-cache
+docker compose up -d
+```
+
+### 六、生产环境优化
+
+对于生产环境，使用专门的配置文件：
+
+```bash
+# 使用生产配置启动
+docker compose -f docker-compose.prod.yml up -d
+
+# 配置资源限制（编辑 .env）
+CPU_LIMIT=4              # 最大CPU核数
+MEMORY_LIMIT=4G          # 最大内存
 ```
 
 ---
@@ -247,56 +367,6 @@ JIANGUOYUN_PASSWORD=your-app-password
 
 ---
 
-## 🚀 生产环境部署
-
-### 使用生产配置
-
-```bash
-# 使用生产环境专用配置
-docker compose -f docker-compose.prod.yml up -d
-```
-
-### 资源配置
-
-Docker Compose 会自动适应服务器资源，无需手动调整。但如果需要，可以通过环境变量自定义：
-
-```bash
-# .env 配置
-CPU_LIMIT=2              # 最大使用 2 个 CPU 核心
-MEMORY_LIMIT=2G          # 最大使用 2GB 内存
-CPU_RESERVATION=0.5      # 预留 0.5 个核心
-MEMORY_RESERVATION=512M  # 预留 512MB 内存
-```
-
-### HTTPS 配置
-
-#### 方式一：使用 Let's Encrypt（推荐）
-
-```bash
-# 1. 运行SSL设置脚本
-./ssl_setup.sh yourdomain.com youremail@example.com
-
-# 2. 设置自动续期
-./ssl_renewal.sh --setup-cron
-
-# 3. 检查证书状态
-./ssl_renewal.sh --check
-```
-
-#### 方式二：使用自有证书
-
-```bash
-# 1. 准备证书文件
-mkdir -p ssl
-cp your-cert.crt ssl/server.crt
-cp your-cert.key ssl/server.key
-
-# 2. 重启服务
-docker compose restart nginx
-```
-
----
-
 ## 🔐 自动协议适应
 
 SoloCloud 支持**自动协议适应**功能，系统会自动检测用户的访问方式并调整安全设置：
@@ -383,81 +453,6 @@ docker compose up -d
 - 点击侧边栏的"存储设置"
 - 可在本地存储和云存储之间切换
 - 配置云存储参数后点击"测试连接"验证
-
----
-
-## 🛠️ 维护操作
-
-### 更新应用
-
-```bash
-# 拉取最新代码
-git pull
-
-# 重新构建并启动
-docker compose down
-docker compose up -d --build
-```
-
-### 查看日志
-
-```bash
-# 实时日志
-docker compose logs -f
-
-# 查看最近100行
-docker compose logs --tail=100
-
-# 仅查看应用日志
-docker compose logs -f solocloud
-```
-
-### 备份数据
-
-```bash
-# 使用备份脚本
-./migrate.sh backup
-
-# 或手动备份
-tar -czf backup-$(date +%Y%m%d).tar.gz data/ uploads/
-```
-
----
-
-## ❓ 常见问题
-
-### 权限问题
-
-```bash
-# 如果遇到权限错误
-chmod -R 777 logs data uploads
-
-# 或设置正确的用户权限
-chown -R 1000:1000 data/ uploads/ logs/
-```
-
-### 端口占用
-
-```bash
-# 检查端口占用
-netstat -tlnp | grep :80
-
-# 修改端口（编辑 .env）
-HTTP_PORT=8080
-HTTPS_PORT=8443
-```
-
-### Docker 命令格式
-
-新版 Docker 使用 `docker compose`（中间有空格），而不是 `docker-compose`：
-
-```bash
-# 正确
-docker compose up -d
-
-# 错误（旧版本）
-docker-compose up -d
-```
 
 ---
 

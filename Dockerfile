@@ -1,5 +1,5 @@
 # 多阶段构建 - 构建阶段
-FROM python:3.11-slim as builder
+FROM python:3.11-slim-bookworm as builder
 
 # 设置工作目录
 WORKDIR /app
@@ -22,7 +22,7 @@ RUN pip install --no-cache-dir --upgrade pip setuptools wheel \
     && pip install --no-cache-dir gunicorn
 
 # 运行阶段
-FROM python:3.11-slim
+FROM python:3.11-slim-bookworm
 
 # 设置环境变量
 ENV PYTHONDONTWRITEBYTECODE=1 \
