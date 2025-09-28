@@ -26,9 +26,13 @@ ln -sf /root/.acme.sh/acme.sh /usr/local/bin/acme.sh
 echo "🔧 安装 socat..."
 apt update && apt install -y socat
 
-# 注册账号
+# 设置默认 CA 为 Let's Encrypt
+echo "🔐 设置使用 Let's Encrypt..."
+acme.sh --set-default-ca --server letsencrypt
+
+# 注册账号（使用 Let's Encrypt）
 echo "🔐 注册 ACME 账号..."
-acme.sh --register-account -m "$EMAIL"
+acme.sh --register-account -m "$EMAIL" --server letsencrypt
 
 # 开放 80 端口（如果使用 ufw）
 if command -v ufw >/dev/null 2>&1; then
@@ -50,8 +54,9 @@ if command -v systemctl >/dev/null 2>&1; then
   systemctl is-active --quiet caddy  && { echo "⏸️ 停止 caddy";  systemctl stop caddy  || true; }
 fi
 
-# 申请证书（standalone 监听 80）
-if ! acme.sh --issue -d "$DOMAIN" --standalone -k ec-256; then
+# 申请证书（使用 Let's Encrypt，standalone 监听 80）
+# 添加 --listen-v4 确保在 IPv6 环境下也能正常工作
+if ! acme.sh --issue -d "$DOMAIN" --standalone -k ec-256 --server letsencrypt --listen-v4; then
   echo "❌ 证书申请失败。请确认域名解析到本机、80 端口可从公网访问，且未被占用。" >&2
   exit 1
 fi

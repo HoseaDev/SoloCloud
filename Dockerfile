@@ -4,8 +4,9 @@ FROM python:3.11-slim-bookworm as builder
 # 设置工作目录
 WORKDIR /app
 
-# 安装构建依赖
-RUN apt-get update && apt-get install -y --no-install-recommends \
+# 安装构建依赖（强制使用 IPv4）
+RUN echo 'Acquire::ForceIPv4 "true";' > /etc/apt/apt.conf.d/99force-ipv4 && \
+    apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     libffi-dev \
     libssl-dev \
@@ -31,8 +32,9 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PATH="/opt/venv/bin:$PATH" \
     PYTHONPATH=/app
 
-# 安装运行时依赖
-RUN apt-get update && apt-get install -y --no-install-recommends \
+# 安装运行时依赖（强制使用 IPv4）
+RUN echo 'Acquire::ForceIPv4 "true";' > /etc/apt/apt.conf.d/99force-ipv4 && \
+    apt-get update && apt-get install -y --no-install-recommends \
     curl \
     libgl1 \
     libglib2.0-0 \

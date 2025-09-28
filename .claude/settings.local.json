@@ -10,7 +10,8 @@
       "Bash(docker exec:*)",
       "Bash(curl:*)",
       "Bash(dd:*)",
-      "Bash(docker-compose:*)"
+      "Bash(docker-compose:*)",
+      "Bash(lsb_release:*)"
     ],
     "deny": [],
     "ask": [],
